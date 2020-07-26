@@ -1,4 +1,4 @@
-# IMU+GNSS Fusion Localization with EKF
+# IMU+GNSS Fusion Localization with ESKF
 
 -----
 
@@ -6,7 +6,7 @@
 
 * Ubuntu (16.04 or later)
 * ROS (kinetic or later)
-  - ROS package: nmea_navsat_driver
+  - ROS package: **nmea_navsat_driver**
 * GeographicLib 1.50.1 (cmake 3.18.0 tested)
 * c++14 (for using `std::make_unique`)
 
@@ -23,6 +23,11 @@ catkin_make -j5 # error happened when using the default cmake 3.5.1, upgrade it
 ## Run
 
 test data: [utbm_robocar_dataset_20180719_noimage.bag](https://lcas.lincoln.ac.uk/owncloud/index.php/s/KfItDFgwwis5Xrk)
+
+* /imu/data: 100 hz
+* /nmea_sentence: 15 hz
+* /fix: 5 hz
+* /nav_path: 63 hz
 
 ```sh
 roslaunch imu_gnss_fusion imu_gnss_fusion.launch

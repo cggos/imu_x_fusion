@@ -10,6 +10,7 @@ add_compile_options(-std=c++14)
 find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   roscpp
+  eigen_conversions
 )
 
 ## System dependencies are found with CMake's conventions
@@ -143,6 +144,7 @@ add_executable(${PROJECT_NAME}_node src/imu_gnss_fusion_node.cpp)
 ## target back to the shorter version for ease of user use
 ## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
+set_target_properties(${PROJECT_NAME}_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above

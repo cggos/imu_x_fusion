@@ -8,6 +8,7 @@ Panels:
         - /Status1
         - /Grid1
         - /Path1
+        - /Odometry1
       Splitter Ratio: 0.5
     Tree Height: 733
   - Class: rviz/Selection
@@ -73,6 +74,40 @@ Visualization Manager:
       Shaft Diameter: 0.100000001
       Shaft Length: 0.100000001
       Topic: /nav_path
+      Unreliable: false
+      Value: true
+    - Angle Tolerance: 0.100000001
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 60
+          Value: true
+        Position:
+          Alpha: 0.300000012
+          Color: 204; 51; 204
+          Scale: 60
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 1
+      Name: Odometry
+      Position Tolerance: 0.100000001
+      Shape:
+        Alpha: 1
+        Axes Length: 30
+        Axes Radius: 5
+        Color: 255; 25; 0
+        Head Length: 0.300000012
+        Head Radius: 0.100000001
+        Shaft Length: 1
+        Shaft Radius: 0.0500000007
+        Value: Axes
+      Topic: /nav_odom
       Unreliable: false
       Value: true
   Enabled: true
