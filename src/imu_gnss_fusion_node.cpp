@@ -175,6 +175,7 @@ bool FusionNode::init_rot_from_imudata(Eigen::Matrix3d &r_GI) {
         sum_acc += imu_data->acc;
     }
     const Eigen::Vector3d mean_acc = sum_acc / (double)imu_buf_.size();
+    printf("[cggos %s] mean_acc: (%f, %f, %f)!!!\n", __FUNCTION__, mean_acc[0], mean_acc[1], mean_acc[2]);
 
     Eigen::Vector3d sum_err2(0., 0., 0.);
     for (const auto imu_data : imu_buf_) sum_err2 += (imu_data->acc - mean_acc).cwiseAbs2();
