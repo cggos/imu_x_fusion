@@ -1,8 +1,5 @@
 # IMU+GNSS Fusion Localization with ESKF
 
-[![Anurag's github stats](https://github-readme-stats.vercel.app/api?username=cggos)](https://github.com/anuraghazra/github-readme-stats)
-
-
 * [传感器融合：基于ESKF的IMU+GPS数据融合](https://blog.csdn.net/u011178262/article/details/107596285)
 
 -----
