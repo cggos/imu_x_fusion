@@ -1,4 +1,4 @@
-# IMU+GNSS Fusion Localization with ESKF
+# IMU + X Fusion Localization with ESKF
 
 * [传感器融合：基于ESKF的IMU+GPS数据融合](https://blog.csdn.net/u011178262/article/details/107596285)
 
@@ -10,6 +10,7 @@
 * ROS (kinetic or later)
   - ROS package: **nmea_navsat_driver**
 * GeographicLib 1.50.1 (cmake 3.18.0 tested)
+* OpenCV
 * c++14 (for using `std::make_unique`)
 
 ## Build

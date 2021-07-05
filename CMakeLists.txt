@@ -4,6 +4,10 @@ project(imu_gnss_fusion)
 # Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++14)
 
+add_definitions(-w)
+
+# set(CMAKE_BUILD_TYPE Debug)
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -19,6 +23,12 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Eigen3 REQUIRED)
 
 find_package (GeographicLib REQUIRED)
+
+find_package(OpenCV)
+if(OpenCV_FOUND)
+	include_directories(${OpenCV_INCLUDE_DIRS})
+	# link_libraries(${OpenCV_LIBS})
+endif()
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -137,24 +147,23 @@ include_directories(
 # Declare a C++ executable
 # With catkin_make all packages are built within a single CMake context
 # The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/imu_gnss_fusion_node.cpp)
+add_executable(imu_gnss_fusion_node src/imu_gnss_fusion_node.cpp)
+add_executable(imu_vo_fusion_node src/imu_vo_fusion_node.cpp src/utils.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
 ## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
-set_target_properties(${PROJECT_NAME}_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
+set_target_properties(imu_gnss_fusion_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_NAME}_node
-  ${catkin_LIBRARIES}
-  ${GeographicLib_LIBRARIES}
-)
+target_link_libraries(imu_gnss_fusion_node ${catkin_LIBRARIES} ${GeographicLib_LIBRARIES})
+target_link_libraries(imu_vo_fusion_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 #############
 ## Install ##

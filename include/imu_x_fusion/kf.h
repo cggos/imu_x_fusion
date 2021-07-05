@@ -4,13 +4,15 @@
 #include <Eigen/Geometry>
 #include <memory>
 
-#include "imu_gnss_fusion/utils.h"
+#include "imu_x_fusion/utils.h"
 
 namespace cg {
 
 constexpr int kStateDim = 15;
 constexpr int kNoiseDim = 12;
 constexpr double kG = 9.81007;
+
+const double kDegreeToRadian = M_PI / 180.;
 
 using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
 
@@ -56,17 +58,18 @@ class KF {
           gyr_bias_noise_(gyr_w) {
         state_ptr_ = std::make_shared<State>();
 
-        const double kDegreeToRadian = M_PI / 180.;
         const double sigma_rp = 10. * kDegreeToRadian;
         const double sigma_yaw = 100. * kDegreeToRadian;
-
-        state_ptr_->cov.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * 100.;                 // position std: 10 m
-        state_ptr_->cov.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * 100.;                 // velocity std: 10 m/s
-        state_ptr_->cov.block<2, 2>(6, 6) = Eigen::Matrix2d::Identity() * sigma_rp * sigma_rp;  // roll pitch std 10 degree
-        state_ptr_->cov(8, 8) = sigma_yaw * sigma_yaw;                                          // yaw std: 100 degree
-        state_ptr_->cov.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * 0.0004;               // Acc bias
-        state_ptr_->cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * 0.0004;             // Gyr bias
     }
+
+    void set_cov(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
+        state_ptr_->cov.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * sigma_p * sigma_p;        // position std: sigma_p m
+        state_ptr_->cov.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * sigma_v * sigma_v;        // velocity std: sigma_v m/s
+        state_ptr_->cov.block<2, 2>(6, 6) = Eigen::Matrix2d::Identity() * sigma_rp * sigma_rp;      // roll pitch std
+        state_ptr_->cov(8, 8) = sigma_yaw * sigma_yaw;                                              // yaw std
+        state_ptr_->cov.block<3, 3>(9, 9)   = Eigen::Matrix3d::Identity() * sigma_ba * sigma_ba;    // Acc bias
+        state_ptr_->cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * sigma_bg * sigma_bg;    // Gyr bias
+    }    
 
     /**
      * @brief predict procedure

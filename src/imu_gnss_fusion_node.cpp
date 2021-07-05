@@ -10,7 +10,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "imu_gnss_fusion/kf.h"
+#include "imu_x_fusion/kf.h"
 
 namespace cg {
 
@@ -24,6 +24,11 @@ class FusionNode {
         nh.param("gyr_bias_noise", gyr_w, 1e-8);
 
         kf_ptr_ = std::make_unique<KF>(acc_n, gyr_n, acc_w, gyr_w);
+
+        const double sigma_pv = 10;
+        const double sigma_rp  = 10 * kDegreeToRadian;
+        const double sigma_yaw = 100 * kDegreeToRadian;
+        kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, 0.02, 0.02);
 
         I_p_Gps_ = Eigen::Vector3d(0., 0., 0.);
 
@@ -214,7 +219,7 @@ bool FusionNode::init_rot_from_imudata(Eigen::Matrix3d &r_GI) {
 
 void FusionNode::publish_save_state() {
     // publish the odometry
-    std::string fixed_id = "world";
+    std::string fixed_id = "global";
     nav_msgs::Odometry odom_msg;
     odom_msg.header.frame_id = fixed_id;
     odom_msg.header.stamp = ros::Time::now();
