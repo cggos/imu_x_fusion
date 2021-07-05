@@ -17,7 +17,6 @@ class FusionNode {
    public:
     FusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
         // ROS sub & pub
-        // std::string topic_gps = "/fix";
         std::string topic_vo = "/odom_vo";
         std::string topic_imu = "/imu0";
 
@@ -35,36 +34,26 @@ class FusionNode {
 
         kf_ptr_ = std::make_unique<KF>(acc_n, gyr_n, acc_w, gyr_w);
 
-        // I_p_Gps_ = Eigen::Vector3d(0., 0., 0.);
-
         const double sigma_pv = 0.0005;
         const double sigma_rp  = 0.01 * kDegreeToRadian;
         const double sigma_yaw = 500 * kDegreeToRadian;
         kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
         imu_sub_ = nh.subscribe(topic_imu, 10, &FusionNode::imu_callback, this);
-        // gps_sub_ = nh.subscribe(topic_gps, 10, &FusionNode::gps_callback, this);
         vo_sub_ = nh.subscribe(topic_vo, 10, &FusionNode::vo_callback, this);
 
         path_pub_ = nh.advertise<nav_msgs::Path>("nav_path", 10);
         odom_pub_ = nh.advertise<nav_msgs::Odometry>("nav_odom", 10);
+        path_pub_vo_ = nh.advertise<nav_msgs::Path>("nav_path_vo", 10);
 
         Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
 
         std::cout << "Tcb: \n" << Tcb.matrix() << std::endl;
-
-        // // log files
-        // file_gps_.open("fusion_gps.csv");
-        // file_state_.open("fusion_state.csv");
     }
 
-    ~FusionNode() {
-        // file_gps_.close();
-        // file_state_.close();
-    }
+    ~FusionNode() {}
 
     void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg);
-    // void gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg);
     void vo_callback(const nav_msgs::OdometryConstPtr &vo_msg);
 
     bool init_rot_from_imudata(Eigen::Matrix3d &r_GI);
@@ -75,35 +64,28 @@ class FusionNode {
 
    private:
     ros::Subscriber imu_sub_;
-    
-    // ros::Subscriber gps_sub_;
     ros::Subscriber vo_sub_;
-    ros::Publisher path_pub_;
+
     ros::Publisher odom_pub_;
+    ros::Publisher path_pub_;
+    ros::Publisher path_pub_vo_;
 
     nav_msgs::Path nav_path_;
+    nav_msgs::Path nav_path_vo_;
 
-    // init
     bool initialized_ = false;
     const int kImuBufSize = 200;
     std::deque<ImuDataConstPtr> imu_buf_;
     ImuDataConstPtr last_imu_ptr_;
 
-    // Eigen::Vector3d init_lla_;
-    // Eigen::Vector3d I_p_Gps_;
-
     Eigen::Isometry3d Tcb;
     Eigen::Isometry3d Tb0bm;
     Eigen::Isometry3d Tc0cm;
 
+    Eigen::Isometry3d TvoB;
+
     // KF
     KFPtr kf_ptr_;
-
-    // // log files
-    // std::ofstream file_gps_;
-    // std::ofstream file_state_;
-
-    double ts_init_ = 0.;
 };
 
 void FusionNode::imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
@@ -187,8 +169,6 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
 
         if (!init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI)) return;
 
-        ts_init_ = kf_ptr_->state_ptr_->timestamp;
-
         Tb0bm.linear() = kf_ptr_->state_ptr_->r_GI;
         Tb0bm.translation().setZero();
 
@@ -227,7 +207,9 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
 
     Eigen::Isometry3d Tbvo = Tc0cm * Tcb * Tb0bm.inverse() * Tb * Tcb.inverse();
 
-    // Eigen::Isometry3d TvoB = Tb0bm * Tcb.inverse() * Tc0cm.inverse() * Tvo * Tcb;
+    // for publish
+    TvoB = Tb0bm * Tcb.inverse() * Tc0cm.inverse() * Tvo * Tcb;
+
     // std::cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
     // std::cout << "VO p: "   << Tvo.translation().transpose() << std::endl;
     // std::cout << "B p VO: " << Tbvo.translation().transpose() << std::endl;
@@ -365,17 +347,15 @@ void FusionNode::publish_save_state() {
     nav_path_.poses.push_back(pose_stamped);
     path_pub_.publish(nav_path_);
 
-    // // save state p q lla
-    // std::shared_ptr<KF::State> kf_state(kf_ptr_->state_ptr_);
-    // Eigen::Vector3d lla;
-    // cg::enu2lla(init_lla_, kf_state->p_GI, &lla);  // convert ENU state to lla
-    // const Eigen::Quaterniond q_GI(kf_state->r_GI);
-    // file_state_ << std::fixed << std::setprecision(15)
-    //             << kf_state->timestamp << ", "
-    //             << kf_state->p_GI[0] << ", " << kf_state->p_GI[1] << ", " << kf_state->p_GI[2] << ", "
-    //             << q_GI.x() << ", " << q_GI.y() << ", " << q_GI.z() << ", " << q_GI.w() << ", "
-    //             << lla[0] << ", " << lla[1] << ", " << lla[2]
-    //             << std::endl;
+    // publish vo path
+    geometry_msgs::Pose pose_vo;
+    tf::poseEigenToMsg(TvoB, pose_vo);
+    geometry_msgs::PoseStamped pose_stamped_vo;
+    pose_stamped_vo.header = pose_stamped.header;
+    pose_stamped_vo.pose = pose_vo;
+    nav_path_vo_.header = pose_stamped_vo.header;
+    nav_path_vo_.poses.push_back(pose_stamped_vo);
+    path_pub_vo_.publish(nav_path_vo_);    
 }
 
 }  // namespace cg
