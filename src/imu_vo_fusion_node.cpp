@@ -56,8 +56,6 @@ class FusionNode {
     void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg);
     void vo_callback(const nav_msgs::OdometryConstPtr &vo_msg);
 
-    bool init_rot_from_imudata(Eigen::Matrix3d &r_GI);
-
     Eigen::Matrix<double, 6, 15> measurementH(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T);
 
     void publish_save_state();
@@ -167,7 +165,7 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
 
         std::cout << std::endl << std::endl;
 
-        if (!init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI)) return;
+        if (!KF::init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI, imu_buf_)) return;
 
         Tb0bm.linear() = kf_ptr_->state_ptr_->r_GI;
         Tb0bm.translation().setZero();
@@ -270,50 +268,6 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
     kf_ptr_->update_measurement(H, R, residual);
 
     publish_save_state();
-}
-
-bool FusionNode::init_rot_from_imudata(Eigen::Matrix3d &r_GI) {
-    // mean and std of IMU accs
-    Eigen::Vector3d sum_acc(0., 0., 0.);
-    for (const auto imu_data : imu_buf_) {
-        sum_acc += imu_data->acc;
-    }
-    const Eigen::Vector3d mean_acc = sum_acc / (double)imu_buf_.size();
-    printf("[cggos %s] mean_acc: (%f, %f, %f)!!!\n", __FUNCTION__, mean_acc[0], mean_acc[1], mean_acc[2]);
-
-    Eigen::Vector3d sum_err2(0., 0., 0.);
-    for (const auto imu_data : imu_buf_) sum_err2 += (imu_data->acc - mean_acc).cwiseAbs2();
-    const Eigen::Vector3d std_acc = (sum_err2 / (double)imu_buf_.size()).cwiseSqrt();
-
-    // acc std limit: 3
-    if (std_acc.maxCoeff() > 3.0) {
-        printf("[cggos %s] Too big acc std: (%f, %f, %f)!!!\n", __FUNCTION__, std_acc[0], std_acc[1], std_acc[2]);
-        return false;
-    }
-
-    // Compute rotation.
-    // ref: https://github.com/rpng/open_vins/blob/master/ov_core/src/init/InertialInitializer.cpp
-
-    // Three axises of the ENU frame in the IMU frame.
-    // z-axis
-    const Eigen::Vector3d &z_axis = mean_acc.normalized();
-
-    // x-axis
-    Eigen::Vector3d x_axis = Eigen::Vector3d::UnitX() - z_axis * z_axis.transpose() * Eigen::Vector3d::UnitX();
-    x_axis.normalize();
-
-    // y-axis
-    Eigen::Vector3d y_axis = z_axis.cross(x_axis);
-    y_axis.normalize();
-
-    Eigen::Matrix3d r_IG;
-    r_IG.block<3, 1>(0, 0) = x_axis;
-    r_IG.block<3, 1>(0, 1) = y_axis;
-    r_IG.block<3, 1>(0, 2) = z_axis;
-
-    r_GI = r_IG.transpose();
-
-    return true;
 }
 
 void FusionNode::publish_save_state() {
