@@ -8,7 +8,8 @@
             "includePath": [
                 "/usr/include/**",
                 "/opt/ros/kinetic/include/**",
-                "include/**"
+                "include/**",
+                "${workspaceFolder}/include"
             ],
             "name": "ROS",
             "intelliSenseMode": "gcc-x64",
