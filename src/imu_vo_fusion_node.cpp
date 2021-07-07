@@ -77,8 +77,8 @@ class FusionNode {
     ImuDataConstPtr last_imu_ptr_;
 
     Eigen::Isometry3d Tcb;
-    Eigen::Isometry3d Tb0bm;
-    Eigen::Isometry3d Tc0cm;
+
+    Eigen::Isometry3d Tvw;
 
     Eigen::Isometry3d TvoB;
 
@@ -119,13 +119,14 @@ void FusionNode::imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
 Eigen::Matrix<double, 6, 15> FusionNode::measurementH(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T) {
     Eigen::Matrix<double, 6, 15> H;
     H.setZero();
-    Eigen::Matrix3d R00 = Tc0cm.linear() * Tcb.linear() * Tb0bm.linear().transpose();
+    
+    const Eigen::Matrix3d &R00 = Tvw.linear();
     H.block<3, 3>(0, 0) = -R00;
-    H.block<3, 3>(0, 6) = R00 * T.linear() * skew_matrix(Tcb.inverse().translation());
+    H.block<3, 3>(0, 6) =  R00 * T.linear() * skew_matrix(Tcb.inverse().translation());
 
     Eigen::Quaterniond q0(kf_ptr_->state_ptr_->r_GI);
-    Eigen::Quaterniond q2(R00);
     Eigen::Quaterniond q1(vo_q.toRotationMatrix() * Tcb.linear());
+    Eigen::Quaterniond q2(R00);
     Eigen::Matrix4d m4 = quat_left_matrix((q2 * q0).normalized()) * quat_right_matrix(q1.conjugate());
     H.block<3, 3>(3, 6) = -m4.block<3,3>(1,1);
 
@@ -156,7 +157,7 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
         }
 
         last_imu_ptr_ = imu_buf_.back();
-        if (std::abs(vo_msg->header.stamp.toSec() - last_imu_ptr_->timestamp) > 0.1) {
+        if (std::abs(vo_msg->header.stamp.toSec() - last_imu_ptr_->timestamp) > 0.08) {
             printf("[cggos %s] ERROR: timestamps are not synchronized!!!\n", __FUNCTION__);
             return;
         }
@@ -167,12 +168,13 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
 
         if (!KF::init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI, imu_buf_)) return;
 
+        Eigen::Isometry3d Tb0bm;
         Tb0bm.linear() = kf_ptr_->state_ptr_->r_GI;
         Tb0bm.translation().setZero();
 
-        Tc0cm = Tvo;
+        Eigen::Isometry3d Tc0cm = Tvo;
 
-        std::cout << "Tc0cm: " << Tc0cm.translation().transpose() << std::endl;
+        Tvw = Tc0cm * Tcb * Tb0bm.inverse();
 
         initialized_ = true;
 
@@ -203,10 +205,10 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
     Tb.linear() = kf_ptr_->state_ptr_->r_GI;
     Tb.translation() = kf_ptr_->state_ptr_->p_GI;
 
-    Eigen::Isometry3d Tbvo = Tc0cm * Tcb * Tb0bm.inverse() * Tb * Tcb.inverse();
+    Eigen::Isometry3d Tbvo = Tvw * Tb * Tcb.inverse();
 
     // for publish
-    TvoB = Tb0bm * Tcb.inverse() * Tc0cm.inverse() * Tvo * Tcb;
+    TvoB = Tvw.inverse() * Tvo * Tcb;
 
     // std::cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
     // std::cout << "VO p: "   << Tvo.translation().transpose() << std::endl;
@@ -233,7 +235,7 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
         T1.linear() = kf_ptr_->state_ptr_->r_GI;
         T1.translation() = kf_ptr_->state_ptr_->p_GI + delta;
 
-        Eigen::Isometry3d TvoN1 = Tc0cm * Tcb * Tb0bm.inverse() * T1 * Tcb.inverse();
+        Eigen::Isometry3d TvoN1 = Tvw * T1 * Tcb.inverse();
 
         auto H1 = measurementH(vo_q, T1);
 
@@ -251,7 +253,7 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
         T2.linear() = kf_ptr_->state_ptr_->r_GI * delta_q.toRotationMatrix();
         T2.translation() = kf_ptr_->state_ptr_->p_GI;
 
-        Eigen::Isometry3d TvoN2 = Tc0cm * Tcb * Tb0bm.inverse() * T2 * Tcb.inverse();
+        Eigen::Isometry3d TvoN2 = Tvw * T2 * Tcb.inverse();
 
         auto H2 = measurementH(vo_q, T2);
 
