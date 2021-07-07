@@ -36,7 +36,7 @@ class FusionNode {
 
         const double sigma_pv = 0.0005;
         const double sigma_rp  = 0.01 * kDegreeToRadian;
-        const double sigma_yaw = 500 * kDegreeToRadian;
+        const double sigma_yaw = 5 * kDegreeToRadian;
         kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
         imu_sub_ = nh.subscribe(topic_imu, 10, &FusionNode::imu_callback, this);
@@ -119,7 +119,7 @@ void FusionNode::imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
 Eigen::Matrix<double, 6, 15> FusionNode::measurementH(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T) {
     Eigen::Matrix<double, 6, 15> H;
     H.setZero();
-    
+
     const Eigen::Matrix3d &R00 = Tvw.linear();
     H.block<3, 3>(0, 0) = -R00;
     H.block<3, 3>(0, 6) =  R00 * T.linear() * skew_matrix(Tcb.inverse().translation());
@@ -157,7 +157,7 @@ void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
         }
 
         last_imu_ptr_ = imu_buf_.back();
-        if (std::abs(vo_msg->header.stamp.toSec() - last_imu_ptr_->timestamp) > 0.08) {
+        if (std::abs(vo_msg->header.stamp.toSec() - last_imu_ptr_->timestamp) > 0.05) {
             printf("[cggos %s] ERROR: timestamps are not synchronized!!!\n", __FUNCTION__);
             return;
         }

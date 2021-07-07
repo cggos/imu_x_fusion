@@ -60,6 +60,10 @@ test data: V1_01_easy.bag
 roslaunch imu_x_fusion imu_vo_fusion.launch
 
 # https://github.com/cggos/orbslam2_cg
+# pose cov:
+# sigma_pv: 0.005
+# sigma_rp: 0.5
+# sigma_yaw: 0.5
 roslaunch orbslam2_ros run_stereo_euroc.launch
 
 rosbag play V1_01_easy.bag
