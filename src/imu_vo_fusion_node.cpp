@@ -16,15 +16,8 @@ namespace cg {
 class FusionNode {
    public:
     FusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
-        // ROS sub & pub
         std::string topic_vo = "/odom_vo";
         std::string topic_imu = "/imu0";
-
-        double acc_n, gyr_n, acc_w, gyr_w;
-        nh.param("acc_noise", acc_n, 1e-2);
-        nh.param("gyr_noise", gyr_n, 1e-4);
-        nh.param("acc_bias_noise", acc_w, 1e-6);
-        nh.param("gyr_bias_noise", gyr_w, 1e-8);
 
         nh.getParam("topic_vo", topic_vo);
         nh.getParam("topic_imu", topic_imu);
@@ -32,11 +25,20 @@ class FusionNode {
         std::cout << "topic_vo: " << topic_vo << std::endl;
         std::cout << "topic_imu: " << topic_imu << std::endl;
 
-        kf_ptr_ = std::make_unique<KF>(acc_n, gyr_n, acc_w, gyr_w);
+        double acc_n, gyr_n, acc_w, gyr_w, sigma_pv, sigma_rp, sigma_yaw;
+        nh.param("acc_noise", acc_n, 1e-2);
+        nh.param("gyr_noise", gyr_n, 1e-4);
+        nh.param("acc_bias_noise", acc_w, 1e-6);
+        nh.param("gyr_bias_noise", gyr_w, 1e-8);
 
-        const double sigma_pv = 0.0005;
-        const double sigma_rp  = 0.01 * kDegreeToRadian;
-        const double sigma_yaw = 5 * kDegreeToRadian;
+        nh.param("init_sigma_pv", sigma_pv, 0.01);
+        nh.param("init_sigma_rp", sigma_rp, 0.01);
+        nh.param("init_sigma_yaw", sigma_yaw, 5.0);
+
+        sigma_rp *= kDegreeToRadian;
+        sigma_yaw *= kDegreeToRadian;
+
+        kf_ptr_ = std::make_unique<KF>(acc_n, gyr_n, acc_w, gyr_w);
         kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
         imu_sub_ = nh.subscribe(topic_imu, 10, &FusionNode::imu_callback, this);
@@ -47,8 +49,6 @@ class FusionNode {
         path_pub_vo_ = nh.advertise<nav_msgs::Path>("nav_path_vo", 10);
 
         Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
-
-        std::cout << "Tcb: \n" << Tcb.matrix() << std::endl;
     }
 
     ~FusionNode() {}
@@ -95,6 +95,14 @@ void FusionNode::imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
     imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
     imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
     imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
+
+    // remove spikes
+    static Eigen::Vector3d last_am = Eigen::Vector3d::Zero();
+    if(imu_data_ptr->acc.norm() > 5 * kG) {
+        imu_data_ptr->acc = last_am;
+    } else {
+        last_am = imu_data_ptr->acc;
+    }
 
     if (!initialized_) {
         imu_buf_.push_back(imu_data_ptr);

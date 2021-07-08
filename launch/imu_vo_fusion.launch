@@ -13,6 +13,10 @@
     <param name="acc_bias_noise"  type="double" value="0.00004" />
     <param name="gyr_bias_noise"  type="double" value="2.0e-6" />
 
+    <param name="init_sigma_pv"   type="double" value="0.01" />
+    <param name="init_sigma_rp"   type="double" value="0.01" />
+    <param name="init_sigma_yaw"  type="double" value="5.0" />
+
     <param name="topic_vo" value="/odom_orbslam" />
     <param name="topic_imu" value="/imu0" />
     
