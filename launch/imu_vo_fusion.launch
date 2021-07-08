@@ -1,12 +1,7 @@
 <launch>
     <arg name="rviz" default="true"/>
 
-    <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-euroc.yaml" />    
-
-    <!-- <param name="acc_noise"       type="double" value="0.05" />
-    <param name="gyr_noise"       type="double" value="0.005" />
-    <param name="acc_bias_noise"  type="double" value="0.01" />
-    <param name="gyr_bias_noise"  type="double" value="0.001" /> -->
+    <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-euroc.yaml" />
 
     <param name="acc_noise"       type="double" value="0.08" />
     <param name="gyr_noise"       type="double" value="0.004" />

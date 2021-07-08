@@ -1,12 +1,16 @@
 <launch>
     <arg name="rviz" default="true"/>
 
-    <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-euroc.yaml"/>    
+    <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-mynteye-s1030.yaml"/>    
 
     <param name="acc_noise"       type="double" value="0.0268014618074" />
     <param name="gyr_noise"       type="double" value="0.00888232829671" />
     <param name="acc_bias_noise"  type="double" value="0.00262960861593" />
     <param name="gyr_bias_noise"  type="double" value="0.000379565782927" />
+
+    <param name="init_sigma_pv"   type="double" value="0.01" />
+    <param name="init_sigma_rp"   type="double" value="0.01" />
+    <param name="init_sigma_yaw"  type="double" value="5.0" />
 
     <param name="topic_vo" value="/odom_orbslam" />
     <param name="topic_imu" value="/mynteye/imu/data_raw" />    
