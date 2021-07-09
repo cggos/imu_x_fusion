@@ -4,14 +4,16 @@
 
 -----
 
+[TOC]
+
 ## Requirements
 
 * Ubuntu (16.04 or later)
 * ROS (kinetic or later)
-  - ROS package: **nmea_navsat_driver**
+  - ROS package: **[nmea_navsat_driver](http://wiki.ros.org/nmea_navsat_driver)**
 * GeographicLib 1.50.1 (cmake 3.18.0 tested)
-* OpenCV
-* c++14 (for using `std::make_unique`)
+* OpenCV3
+* C++14 (for using `std::make_unique`)
 
 ## Build
 
@@ -46,7 +48,7 @@ ROS graph and path on rviz:
   <img src="imgs/run_imu_gnss_fusion.jpg"/>
 </p>
 
-plot the result path(fusion_gps.csv & fusion_state.csv) on google map:
+plot the result path (fusion_gps.csv & fusion_state.csv) on Google Map using the scripts `folium_csv.py`:
 
 <p align="center">
   <img src="imgs/google_map.jpg"/>
@@ -54,14 +56,14 @@ plot the result path(fusion_gps.csv & fusion_state.csv) on google map:
 
 ### IMU + VO
 
-test data: V1_01_easy.bag
+#### VO: ORB-SLAM2 (Stereo) + EuRoC V1_01_easy.bag
 
 ```sh
 roslaunch imu_x_fusion imu_vo_fusion.launch
 
 # https://github.com/cggos/orbslam2_cg
 # pose cov:
-# sigma_pv: 0.005
+# sigma_pv: 0.001
 # sigma_rp: 0.5
 # sigma_yaw: 0.5
 roslaunch orbslam2_ros run_stereo_euroc.launch
@@ -71,5 +73,19 @@ rosbag play V1_01_easy.bag
 
 <p align="center">
   <img src="imgs/rosgraph_imu_vo.png"/>
+</p>
+
+results(Green path: estimated pose; Red path: pose of VO):
+
+<p align="center">
   <img src="imgs/run_imu_vo_fusion.png"/>
 </p>
+
+#### VO: ORB-SLAM2 (Stereo) + MYNTEYE-S1030 Camera
+
+```sh
+# TODO: Test
+roslaunch imu_x_fusion imu_vo_fusion_mynteye.launch
+
+roslaunch mynt_eye_ros_wrapper mynteye.launch
+```
