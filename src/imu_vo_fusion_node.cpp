@@ -3,6 +3,7 @@
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 #include <Eigen/Core>
 #include <deque>
@@ -44,9 +45,9 @@ class FusionNode {
         imu_sub_ = nh.subscribe(topic_imu, 10, &FusionNode::imu_callback, this);
         vo_sub_ = nh.subscribe(topic_vo, 10, &FusionNode::vo_callback, this);
 
-        path_pub_ = nh.advertise<nav_msgs::Path>("nav_path", 10);
-        odom_pub_ = nh.advertise<nav_msgs::Odometry>("nav_odom", 10);
-        path_pub_vo_ = nh.advertise<nav_msgs::Path>("nav_path_vo", 10);
+        path_pub_ = nh.advertise<nav_msgs::Path>("path_est", 10);
+        path_pub_vo_ = nh.advertise<nav_msgs::Path>("path_vo", 10);
+        odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom_est", 10);
 
         Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
     }
@@ -54,7 +55,7 @@ class FusionNode {
     ~FusionNode() {}
 
     void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg);
-    void vo_callback(const nav_msgs::OdometryConstPtr &vo_msg);
+    void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
     Eigen::Matrix<double, 6, 15> measurementH(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T);
 
@@ -143,7 +144,7 @@ Eigen::Matrix<double, 6, 15> FusionNode::measurementH(const Eigen::Quaterniond &
     return H;
 }
 
-void FusionNode::vo_callback(const nav_msgs::OdometryConstPtr &vo_msg) {
+void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg) {
     Eigen::Vector3d vo_p;
     Eigen::Quaterniond vo_q;
     vo_p.x() = vo_msg->pose.pose.position.x;
@@ -287,6 +288,9 @@ void FusionNode::publish_save_state() {
     odom_msg.header.stamp = ros::Time::now();
     odom_msg.header.frame_id = fixed_id;
     odom_msg.child_frame_id = "odom";
+
+    std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
+    std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
 
     Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
     T_wb.linear() = kf_ptr_->state_ptr_->r_GI;
