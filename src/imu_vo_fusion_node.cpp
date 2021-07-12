@@ -228,7 +228,8 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     // residual
     Eigen::Matrix<double, 6, 1> residual;
     residual.topRows(3) = Tvo.translation() - Tbvo.translation();
-    residual.bottomRows(3) = 2.0 * Eigen::Quaterniond(Tvo.linear() * Tbvo.linear().transpose()).vec();
+    Eigen::Quaterniond q_res(Tvo.linear() * Tbvo.linear().transpose());
+    residual.bottomRows(3) = 2.0 * q_res.vec() / q_res.w();
 
     std::cout << "res: " << residual.transpose() << std::endl;
 
@@ -269,7 +270,8 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
         std::cout << "q res: " << (TvoN2.translation() - Tbvo.translation()).transpose() << std::endl;
         std::cout << "q Hx: " << (H2.block<3,3>(0, 6) * delta).transpose() << std::endl;
 
-        std::cout << "R q res: " << (2.0 * Eigen::Quaterniond(TvoN2.linear() * Tbvo.linear().transpose()).vec()).transpose() << std::endl;
+        Eigen::Quaterniond q_err(TvoN2.linear() * Tbvo.linear().transpose());
+        std::cout << "R q res: " << (2.0 * q_err.vec() / q_err.w()).transpose() << std::endl;
         std::cout << "R q Hx: " << (H2.block<3,3>(3, 6) * delta).transpose() << std::endl;
         std::cout << "---------------------" << std::endl;
     }
