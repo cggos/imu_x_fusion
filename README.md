@@ -58,6 +58,8 @@ plot the result path (fusion_gps.csv & fusion_state.csv) on Google Map using the
 
 #### VO: ORB-SLAM2 (Stereo) + EuRoC V1_01_easy.bag
 
+##### run ORB-SLAM2 (Stereo) and play back bag file
+
 ```sh
 roslaunch imu_x_fusion imu_vo_fusion.launch
 
@@ -80,6 +82,16 @@ results(Green path: estimated pose; Red path: pose of VO):
 <p align="center">
   <img src="imgs/run_imu_vo_fusion.png"/>
 </p>
+
+##### Use the recorded bag file directly
+
+Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/0PisQYJkB)
+
+```sh
+roslaunch imu_x_fusion imu_vo_fusion.launch
+
+rosbag play orbslam2_v101easy.bag
+```
 
 #### VO: ORB-SLAM2 (Stereo) + MYNTEYE-S1030 Camera
 
