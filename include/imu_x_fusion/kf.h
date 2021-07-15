@@ -1,9 +1,5 @@
 #pragma once
 
-#include <Eigen/Core>
-#include <Eigen/Geometry>
-#include <memory>
-
 #include "imu_x_fusion/utils.h"
 
 namespace cg {
@@ -15,6 +11,15 @@ constexpr double kG = 9.81007;
 const double kDegreeToRadian = M_PI / 180.;
 
 using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
+
+struct ImuData {
+    double timestamp;
+
+    Eigen::Vector3d acc;
+    Eigen::Vector3d gyr;
+};
+using ImuDataPtr = std::shared_ptr<ImuData>;
+using ImuDataConstPtr = std::shared_ptr<const ImuData>;
 
 class KF {
    public:
@@ -63,13 +68,13 @@ class KF {
     }
 
     void set_cov(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
-        state_ptr_->cov.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * sigma_p * sigma_p;        // position std: sigma_p m
-        state_ptr_->cov.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * sigma_v * sigma_v;        // velocity std: sigma_v m/s
-        state_ptr_->cov.block<2, 2>(6, 6) = Eigen::Matrix2d::Identity() * sigma_rp * sigma_rp;      // roll pitch std
-        state_ptr_->cov(8, 8) = sigma_yaw * sigma_yaw;                                              // yaw std
-        state_ptr_->cov.block<3, 3>(9, 9)   = Eigen::Matrix3d::Identity() * sigma_ba * sigma_ba;    // Acc bias
-        state_ptr_->cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * sigma_bg * sigma_bg;    // Gyr bias
-    }    
+        state_ptr_->cov.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * sigma_p * sigma_p;      // position std: sigma_p m
+        state_ptr_->cov.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * sigma_v * sigma_v;      // velocity std: sigma_v m/s
+        state_ptr_->cov.block<2, 2>(6, 6) = Eigen::Matrix2d::Identity() * sigma_rp * sigma_rp;    // roll pitch std
+        state_ptr_->cov(8, 8) = sigma_yaw * sigma_yaw;                                            // yaw std
+        state_ptr_->cov.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * sigma_ba * sigma_ba;    // Acc bias
+        state_ptr_->cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * sigma_bg * sigma_bg;  // Gyr bias
+    }
 
     /**
      * @brief predict procedure
@@ -216,7 +221,7 @@ class KF {
         r_GI = r_IG.transpose();
 
         return true;
-    }    
+    }
 
     ~KF() {}
 

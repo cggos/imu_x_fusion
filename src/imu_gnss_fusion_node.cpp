@@ -5,11 +5,11 @@
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/NavSatFix.h>
 
-#include <Eigen/Core>
 #include <deque>
 #include <fstream>
 #include <iostream>
 
+#include "imu_x_fusion/gnss.h"
 #include "imu_x_fusion/kf.h"
 
 namespace cg {
@@ -26,7 +26,7 @@ class FusionNode {
         kf_ptr_ = std::make_unique<KF>(acc_n, gyr_n, acc_w, gyr_w);
 
         const double sigma_pv = 10;
-        const double sigma_rp  = 10 * kDegreeToRadian;
+        const double sigma_rp = 10 * kDegreeToRadian;
         const double sigma_yaw = 100 * kDegreeToRadian;
         kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, 0.02, 0.02);
 

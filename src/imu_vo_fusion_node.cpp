@@ -5,9 +5,7 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 
-#include <Eigen/Core>
 #include <deque>
-#include <fstream>
 #include <iostream>
 
 #include "imu_x_fusion/kf.h"
