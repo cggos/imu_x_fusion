@@ -59,7 +59,7 @@ class FusionNode {
 
     Eigen::Matrix<double, 6, 15> measurementH(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T);
 
-    void publish_save_state();
+    void publish();
 
    private:
     ros::Subscriber imu_sub_;
@@ -116,6 +116,8 @@ void FusionNode::imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
     last_imu_ptr_ = imu_data_ptr;
 
     // imu_buf_.push_back(imu_data_ptr);
+
+    publish();
 }
 
 /**
@@ -204,7 +206,7 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     //         kf_ptr_->predict(last_imu_ptr_, *i);
     //         last_imu_ptr_ = *i;
     //         ++i;
-    //         publish_save_state();
+    //         publish();
     //     } else {
     //         break;
     //     }
@@ -280,19 +282,17 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     Eigen::Matrix<double, 6, 6> R = Eigen::Map<const Eigen::Matrix<double, 6, 6>>(vo_msg->pose.covariance.data());
     kf_ptr_->update_measurement(H, R, residual);
 
-    publish_save_state();
+    std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
+    std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;    
 }
 
-void FusionNode::publish_save_state() {
+void FusionNode::publish() {
     // publish the odometry
     std::string fixed_id = "global";
     nav_msgs::Odometry odom_msg;
     odom_msg.header.stamp = ros::Time::now();
     odom_msg.header.frame_id = fixed_id;
     odom_msg.child_frame_id = "odom";
-
-    std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
-    std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
 
     Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
     T_wb.linear() = kf_ptr_->state_ptr_->r_GI;
