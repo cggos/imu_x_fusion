@@ -1,6 +1,7 @@
-# IMU + X Fusion Localization with ESKF
+# IMU + X Loose Fusion Localization based on ESKF
 
-* [传感器融合：基于ESKF的IMU+GPS数据融合](https://blog.csdn.net/u011178262/article/details/107596285)
+* IMU + GPS: [传感器融合：基于ESKF的IMU+GPS数据融合](https://cggos.github.io/sensorfusion-imu-gnss.html)
+* IMU + VO: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
 
 -----
 
