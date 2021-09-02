@@ -86,7 +86,7 @@ results(Green path: estimated pose; Red path: pose of VO):
 
 ##### Use the recorded bag file directly
 
-Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/0PisQYJkB)
+Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/wYejg2zlD)
 
 ```sh
 roslaunch imu_x_fusion imu_vo_fusion.launch
