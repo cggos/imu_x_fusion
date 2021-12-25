@@ -12,6 +12,9 @@ const double kDegreeToRadian = M_PI / 180.;
 
 using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
 
+enum ROTATION_PERTURBATION{LOCAL, GLOBAL};
+enum JACOBIAN_MEASUREMENT{HX_X, NEGATIVE_RX_X}; // h(x)/delta X, -r(x)/delta X
+
 struct ImuData {
     double timestamp;
 
@@ -23,6 +26,9 @@ using ImuDataConstPtr = std::shared_ptr<const ImuData>;
 
 class KF {
    public:
+    const ROTATION_PERTURBATION kRotPerturbation_ = ROTATION_PERTURBATION::LOCAL;
+    const JACOBIAN_MEASUREMENT kJacobMeasurement_ = JACOBIAN_MEASUREMENT::HX_X;
+
     struct State {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -152,7 +158,8 @@ class KF {
      */
     template <class H_type, class Res_type, class R_type>
     void update_measurement(
-        const Eigen::MatrixBase<H_type> &H, const Eigen::MatrixBase<R_type> &V, const Eigen::MatrixBase<Res_type> &r) {
+        const Eigen::MatrixBase<H_type> &H, const Eigen::MatrixBase<R_type> &V, const Eigen::MatrixBase<Res_type> &r,
+        ROTATION_PERTURBATION rot_perturbation = ROTATION_PERTURBATION::LOCAL) {
         EIGEN_STATIC_ASSERT_FIXED_SIZE(H_type);
         EIGEN_STATIC_ASSERT_FIXED_SIZE(R_type);
 
@@ -169,7 +176,16 @@ class KF {
         state_ptr_->v_GI += delta_x.block<3, 1>(3, 0);
         const Eigen::Vector3d &dR = delta_x.block<3, 1>(6, 0);
         if (dR.norm() > DBL_EPSILON) {
-            state_ptr_->r_GI *= Eigen::AngleAxisd(dR.norm(), dR.normalized()).toRotationMatrix();
+            Eigen::Matrix3d deltaR = Eigen::AngleAxisd(dR.norm(), dR.normalized()).toRotationMatrix();
+            switch (rot_perturbation) {
+                case ROTATION_PERTURBATION::LOCAL:
+                    state_ptr_->r_GI *= deltaR;
+                break;
+                case ROTATION_PERTURBATION::GLOBAL:
+                    state_ptr_->r_GI = deltaR * state_ptr_->r_GI;
+                    // state_ptr_->r_GI *= deltaR;
+                break;        
+            }
         }
         state_ptr_->acc_bias += delta_x.block<3, 1>(9, 0);
         state_ptr_->gyr_bias += delta_x.block<3, 1>(12, 0);
