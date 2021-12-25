@@ -1,6 +1,6 @@
 # IMU + X Loose Fusion Localization based on ESKF
 
-* IMU + GPS: [传感器融合：基于ESKF的IMU+GPS数据融合](https://cggos.github.io/sensorfusion-imu-gnss.html)
+* IMU + GPS: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cggos.github.io/sensorfusion-imu-gnss.html)
 * IMU + VO: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
 
 -----
@@ -9,12 +9,23 @@
 
 ## Requirements
 
-* Ubuntu (16.04 or later)
-* ROS (kinetic or later)
-  - ROS package: **[nmea_navsat_driver](http://wiki.ros.org/nmea_navsat_driver)**
-* GeographicLib 1.50.1 (cmake 3.18.0 tested)
-* OpenCV3
-* C++14 (for using `std::make_unique`)
+tested on Ubuntu 16.04 and Ubuntu 18.04
+
+### Ubuntu 16.04 & ROS Kinetic
+
+* OpenCV 3
+* ROS package: **[nmea_navsat_driver](http://wiki.ros.org/nmea_navsat_driver)**
+* GeographicLib 1.50.1 (built from souce code, cmake 3.18.0 tested)
+
+
+### Ubuntu 18.04 & ROS Melodic
+
+* OpenCV 3
+* ROS package: **[nmea_navsat_driver](http://wiki.ros.org/nmea_navsat_driver)**
+* GeographicLib 1.49
+  ```sh
+  sudo apt install libgeographic-dev
+  ```
 
 ## Build
 
@@ -23,7 +34,9 @@ mkdir -p ws_msf/src
 cd ws_msf/src
 git clone xxx
 cd ..
-catkin_make -j5 # error happened when using the default cmake 3.5.1, upgrade it
+catkin_make -j4 # error happened when using the default cmake 3.5.1, upgrade it
+# or
+catkin build -j4
 ```
 
 ## Run
@@ -32,13 +45,13 @@ catkin_make -j5 # error happened when using the default cmake 3.5.1, upgrade it
 
 test data: [utbm_robocar_dataset_20180719_noimage.bag](https://lcas.lincoln.ac.uk/owncloud/index.php/s/KfItDFgwwis5Xrk)
 
-* /imu/data: 100 hz
-* /nmea_sentence: 15 hz
-* /fix: 5 hz
-* /nav_path: 63 hz
+* [sensor_msgs/Imu] /imu/data: 100 hz
+* [nmea_msgs/Sentence] /nmea_sentence: 15 hz
+* [sensor_msgs/NavSatFix] /fix: 5 hz
+* [nav_msgs/Path] /nav_path: 63 hz
 
 ```sh
-roslaunch imu_gnss_fusion imu_gnss_fusion.launch
+roslaunch imu_x_fusion imu_gnss_fusion.launch
 rosbag play -s 25 utbm_robocar_dataset_20180719_noimage.bag
 ```
 
@@ -106,9 +119,13 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
 ## TODO
 
 * Sensors
+  - [x] IMU
   - [ ] Wheel Odometer
   - [ ] Manometer
+  - [x] GPS
+  - [x] VO
 * State Estimation
+  - [x] EKF(ESKF)
   - [ ] UKF
   - [ ] Particle Filter
   - [ ] GN/LM
