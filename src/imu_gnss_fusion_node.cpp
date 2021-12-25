@@ -30,13 +30,10 @@ class FusionNode {
     const double sigma_yaw = 100 * kDegreeToRadian;
     kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, 0.02, 0.02);
 
-    I_p_Gps_ = Eigen::Vector3d(0., 0., 0.);
-
-    // ROS sub & pub
     std::string topic_imu = "/imu/data";
     std::string topic_gps = "/fix";
 
-    imu_sub_ = nh.subscribe(topic_imu, 10, &FusionNode::imu_callback, this);
+    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&KF::imu_callback, kf_ptr_.get(), _1));
     gps_sub_ = nh.subscribe(topic_gps, 10, &FusionNode::gps_callback, this);
 
     path_pub_ = nh.advertise<nav_msgs::Path>("nav_path", 10);
@@ -48,11 +45,10 @@ class FusionNode {
   }
 
   ~FusionNode() {
-    file_gps_.close();
-    file_state_.close();
+    if (file_gps_.is_open()) file_gps_.close();
+    if (file_state_.is_open()) file_state_.close();
   }
 
-  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg);
   void gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg);
 
   void publish_save_state();
@@ -60,50 +56,20 @@ class FusionNode {
  private:
   ros::Subscriber imu_sub_;
   ros::Subscriber gps_sub_;
+
   ros::Publisher path_pub_;
   ros::Publisher odom_pub_;
 
   nav_msgs::Path nav_path_;
 
-  // init
-  bool initialized_ = false;
-  const int kImuBufSize = 100;
-  std::deque<ImuDataConstPtr> imu_buf_;
-  ImuDataConstPtr last_imu_ptr_;
   Eigen::Vector3d init_lla_;
+  Eigen::Vector3d I_p_Gps_ = Eigen::Vector3d(0., 0., 0.);
 
-  Eigen::Vector3d I_p_Gps_;
-
-  // KF
   KFPtr kf_ptr_;
 
-  // log files
   std::ofstream file_gps_;
   std::ofstream file_state_;
 };
-
-void FusionNode::imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
-  ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
-  imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
-  imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
-  imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
-  imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
-  imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
-  imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
-  imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
-
-  if (!initialized_) {
-    imu_buf_.push_back(imu_data_ptr);
-    if (imu_buf_.size() > kImuBufSize) imu_buf_.pop_front();
-    return;
-  }
-
-  kf_ptr_->predict(last_imu_ptr_, imu_data_ptr);
-
-  last_imu_ptr_ = imu_data_ptr;
-
-  publish_save_state();
-}
 
 void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   if (gps_msg->status.status != 2) {
@@ -118,25 +84,23 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   gps_data_ptr->lla[2] = gps_msg->altitude;
   gps_data_ptr->cov = Eigen::Map<const Eigen::Matrix3d>(gps_msg->position_covariance.data());
 
-  if (!initialized_) {
-    if (imu_buf_.size() < kImuBufSize) {
+  if (!kf_ptr_->initialized_) {
+    if (kf_ptr_->imu_buf_.size() < kf_ptr_->kImuBufSize) {
       printf("[cggos %s] ERROR: Not Enough IMU data for Initialization!!!\n", __FUNCTION__);
       return;
     }
 
-    last_imu_ptr_ = imu_buf_.back();
-    if (std::abs(gps_data_ptr->timestamp - last_imu_ptr_->timestamp) > 0.5) {
+    kf_ptr_->last_imu_ptr_ = kf_ptr_->imu_buf_.back();
+    if (std::abs(gps_data_ptr->timestamp - kf_ptr_->last_imu_ptr_->timestamp) > 0.5) {
       printf("[cggos %s] ERROR: Gps and Imu timestamps are not synchronized!!!\n", __FUNCTION__);
       return;
     }
 
-    kf_ptr_->state_ptr_->timestamp = last_imu_ptr_->timestamp;
+    kf_ptr_->state_ptr_->timestamp = kf_ptr_->last_imu_ptr_->timestamp;
 
-    if (!KF::init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI, imu_buf_)) return;
+    if (!kf_ptr_->init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI, kf_ptr_->imu_buf_)) return;
 
     init_lla_ = gps_data_ptr->lla;
-
-    initialized_ = true;
 
     printf("[cggos %s] System initialized.\n", __FUNCTION__);
 
@@ -154,7 +118,7 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   Eigen::Vector3d residual = p_G_Gps - (p_GI + r_GI * I_p_Gps_);
 
   // jacobian
-  Eigen::Matrix<double, 3, 15> H;
+  Eigen::Matrix<double, 3, kStateDim> H;
   H.setZero();
   H.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
   H.block<3, 3>(0, 6) = -r_GI * cg::skew_matrix(I_p_Gps_);
@@ -163,6 +127,8 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   const Eigen::Matrix3d &V = gps_data_ptr->cov;
 
   kf_ptr_->update_measurement(H, V, residual);
+
+  publish_save_state();
 
   // save gps lla
   file_gps_ << std::fixed << std::setprecision(15) << gps_data_ptr->timestamp << ", " << gps_data_ptr->lla[0] << ", "

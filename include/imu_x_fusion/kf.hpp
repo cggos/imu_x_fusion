@@ -29,6 +29,11 @@ class KF {
   const ROTATION_PERTURBATION kRotPerturbation_ = ROTATION_PERTURBATION::LOCAL;
   const JACOBIAN_MEASUREMENT kJacobMeasurement_ = JACOBIAN_MEASUREMENT::HX_X;
 
+  bool initialized_ = false;
+  const int kImuBufSize = 200;
+  std::deque<ImuDataConstPtr> imu_buf_;
+  ImuDataConstPtr last_imu_ptr_;
+
   struct State {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -77,6 +82,37 @@ class KF {
     state_ptr_->cov(8, 8) = sigma_yaw * sigma_yaw;                                            // yaw std
     state_ptr_->cov.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * sigma_ba * sigma_ba;    // Acc bias
     state_ptr_->cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * sigma_bg * sigma_bg;  // Gyr bias
+  }
+
+  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
+    ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
+    imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
+    imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
+    imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
+    imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
+    imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
+    imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
+    imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
+
+    // remove spikes
+    static Eigen::Vector3d last_am = Eigen::Vector3d::Zero();
+    if (imu_data_ptr->acc.norm() > 5 * kG) {
+      imu_data_ptr->acc = last_am;
+    } else {
+      last_am = imu_data_ptr->acc;
+    }
+
+    if (!initialized_) {
+      imu_buf_.push_back(imu_data_ptr);
+      if (imu_buf_.size() > kImuBufSize) imu_buf_.pop_front();
+      return;
+    }
+
+    predict(last_imu_ptr_, imu_data_ptr);
+
+    last_imu_ptr_ = imu_data_ptr;
+
+    // imu_buf_.push_back(imu_data_ptr);
   }
 
   /**
@@ -193,7 +229,7 @@ class KF {
     state_ptr_->cov = I_KH * P * I_KH.transpose() + K * V * K.transpose();
   }
 
-  static bool init_rot_from_imudata(Eigen::Matrix3d &r_GI, const std::deque<ImuDataConstPtr> &imu_buf) {
+  bool init_rot_from_imudata(Eigen::Matrix3d &r_GI, const std::deque<ImuDataConstPtr> &imu_buf) {
     // mean and std of IMU accs
     Eigen::Vector3d sum_acc(0., 0., 0.);
     for (const auto imu_data : imu_buf) {
@@ -233,6 +269,8 @@ class KF {
     r_IG.block<3, 1>(0, 2) = z_axis;
 
     r_GI = r_IG.transpose();
+
+    initialized_ = true;
 
     return true;
   }
