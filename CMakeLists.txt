@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(imu_x_fusion)
 
 # Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++14)
+add_compile_options(-std=c++14) # for std::make_unique
 
 add_definitions(-w)
 
@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Eigen3 REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH /usr/share/cmake/geographiclib) # for ubuntu 18.04
 find_package (GeographicLib REQUIRED)
 
 find_package(OpenCV)
