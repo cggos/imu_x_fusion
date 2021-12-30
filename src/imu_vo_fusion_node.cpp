@@ -85,10 +85,10 @@ class FusionNode {
 Eigen::Vector3d FusionNode::measurement_res(const Eigen::Isometry3d &Tobs, const Eigen::Isometry3d &Test) {
   Eigen::Quaterniond q_res;
   switch (kf_ptr_->kRotPerturbation_) {
-    case ROTATION_PERTURBATION::LOCAL:
+    case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
       q_res = Eigen::Quaterniond(Test.linear().transpose() * Tobs.linear());
       break;
-    case ROTATION_PERTURBATION::GLOBAL:
+    case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
       q_res = Eigen::Quaterniond(Tobs.linear() * Test.linear().transpose());
       break;
   }
@@ -116,14 +116,16 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
   switch (kf_ptr_->kJacobMeasurement_) {
     case JACOBIAN_MEASUREMENT::HX_X: {
       H.block<3, 3>(0, 0) = Rvw;
+
+      // LOCAL_PERTURBATION
       H.block<3, 3>(0, 6) = -Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
 
       Eigen::Matrix4d m4;
       switch (kf_ptr_->kRotPerturbation_) {
-        case ROTATION_PERTURBATION::LOCAL:
+        case ROTATION_PERTURBATION::LOCAL_PERTURBATION:
           m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
           break;
-        case ROTATION_PERTURBATION::GLOBAL:
+        case ROTATION_PERTURBATION::GLOBAL_PERTURBATION:
           m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * q_cb.conjugate()).normalized());
           break;
       }
@@ -131,17 +133,20 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
     } break;
     case JACOBIAN_MEASUREMENT::NEGATIVE_RX_X: {
       H.block<3, 3>(0, 0) = -Rvw;
+
+      // LOCAL_PERTURBATION
       H.block<3, 3>(0, 6) = Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
 
       Eigen::Matrix4d m4;
-      switch (kf_ptr_->kRotPerturbation_) {
-        case ROTATION_PERTURBATION::LOCAL:
-          m4 = quat_left_matrix((vo_q.conjugate() * q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
-          break;
-        case ROTATION_PERTURBATION::GLOBAL:
+      if (kf_ptr_->kAngError_ == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
+        // LOCAL_PERTURBATION
+        m4 = quat_left_matrix((vo_q.conjugate() * q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
+      } else {
+        if (kf_ptr_->kRotPerturbation_ == ROTATION_PERTURBATION::LOCAL_PERTURBATION) {
+          m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix((vo_q * q_cb).conjugate().normalized());
+        } else {
           m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * (vo_q * q_cb).conjugate()).normalized());
-          // m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix((vo_q * q_cb).conjugate().normalized());
-          break;
+        }
       }
       H.block<3, 3>(3, 6) = -m4.block<3, 3>(1, 1);
 
@@ -220,7 +225,7 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
 
   Eigen::Matrix<double, kMeasDim, kMeasDim> R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
-  kf_ptr_->update_measurement(H, R, residual, kf_ptr_->kRotPerturbation_);
+  kf_ptr_->update_measurement(H, R, residual, kf_ptr_->kAngError_);
 
   std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
@@ -240,11 +245,11 @@ void FusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Iso
   delta_q.w() = 1;
   delta_q.vec() = 0.5 * delta;
   Eigen::Isometry3d T2 = Twb;
-  switch (kf_ptr_->kRotPerturbation_) {
-    case ROTATION_PERTURBATION::LOCAL:
+  switch (kf_ptr_->kAngError_) {
+    case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
       T2.linear() *= delta_q.toRotationMatrix();
       break;
-    case ROTATION_PERTURBATION::GLOBAL:
+    case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
       T2.linear() = delta_q.toRotationMatrix() * T2.linear();
       break;
   }
