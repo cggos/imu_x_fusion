@@ -1,7 +1,12 @@
 # IMU + X Loose Fusion Localization based on ESKF
 
-* IMU + GPS: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cggos.github.io/sensorfusion-imu-gnss.html)
-* IMU + VO: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
+* IMU + GPS
+  - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cggos.github.io/sensorfusion-imu-gnss.html)
+
+* IMU + VO (Stereo)
+  - [x] ESKF: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
+  - [ ] IEKF
+  - [ ] UKF
 
 -----
 
@@ -11,21 +16,21 @@
 
 tested on Ubuntu 16.04 and Ubuntu 18.04
 
-### Ubuntu 16.04 & ROS Kinetic
+* Ubuntu 16.04 & ROS Kinetic
 
-* OpenCV 3
-* ROS package: **[nmea_navsat_driver](http://wiki.ros.org/nmea_navsat_driver)**
-* GeographicLib 1.50.1 (built from souce code, cmake 3.18.0 tested)
+  * OpenCV 3
+  * ROS package: nmea_navsat_driver
+  * GeographicLib 1.50.1 (built from souce code, cmake 3.18.0 tested)
 
 
-### Ubuntu 18.04 & ROS Melodic
+* Ubuntu 18.04 & ROS Melodic
 
-* OpenCV 3
-* ROS package: **[nmea_navsat_driver](http://wiki.ros.org/nmea_navsat_driver)**
-* GeographicLib 1.49
-  ```sh
-  sudo apt install libgeographic-dev
-  ```
+  * OpenCV 3
+  * ROS package: nmea_navsat_driver
+  * GeographicLib 1.49
+    ```sh
+    sudo apt install libgeographic-dev
+    ```
 
 ## Build
 
@@ -116,16 +121,17 @@ roslaunch imu_x_fusion imu_vo_fusion_mynteye.launch
 roslaunch mynt_eye_ros_wrapper mynteye.launch
 ```
 
-## TODO
+## Features
 
 * Sensors
   - [x] IMU
   - [ ] Wheel Odometer
   - [ ] Manometer
   - [x] GPS
-  - [x] VO
+  - [x] VO (Stereo)
 * State Estimation
   - [x] EKF(ESKF)
+  - [ ] IEKF
   - [ ] UKF
   - [ ] Particle Filter
   - [ ] GN/LM
