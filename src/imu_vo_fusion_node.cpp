@@ -172,6 +172,9 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
   Tvo.linear() = vo_q.toRotationMatrix();
   Tvo.translation() = vo_p;
 
+  const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
+      Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
+
   if (!kf_ptr_->initialized_) {
     if (kf_ptr_->imu_buf_.size() < kf_ptr_->kImuBufSize) {
       printf("[cggos %s] ERROR: Not Enough IMU data for Initialization!!!\n", __FUNCTION__);
@@ -201,31 +204,45 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     return;
   }
 
-  Eigen::Isometry3d Twb;
-  Twb.linear() = kf_ptr_->state_ptr_->r_GI;
-  Twb.translation() = kf_ptr_->state_ptr_->p_GI;
-
   // for publish, Tvo in frame W --> Tb0bn
   TvoB = Tvw.inverse() * Tvo * Tcb;
 
-  // measurement, Twb in frame V --> Tc0cn
-  Eigen::Isometry3d Twb_in_V = Tvw * Twb * Tcb.inverse();
+  // IEKF iteration update
+  int n_ite = 10;
+  for (int i = 0; i < n_ite; i++) {
+    if (i == 0) kf_ptr_->state_ptr_->update_iekf();
 
-  // residual
-  Eigen::Matrix<double, kMeasDim, 1> residual;
-  residual.topRows(3) = Tvo.translation() - Twb_in_V.translation();
-  residual.bottomRows(3) = measurement_res(Tvo, Twb_in_V);
+    Eigen::Isometry3d Twb_i;
+    Twb_i.linear() = kf_ptr_->state_ptr_->r_GI_i;
+    Twb_i.translation() = kf_ptr_->state_ptr_->p_GI_i;
 
-  std::cout << "res: " << residual.transpose() << std::endl;
+    // measurement estimation h(x_i), Twb in frame V --> Tc0cn
+    Eigen::Isometry3d Twb_in_V = Tvw * Twb_i * Tcb.inverse();
 
-  // jacobian
-  auto H = measurementH(vo_q, Twb);
+    // measurement jacobian
+    const auto &H_i = measurementH(vo_q, Twb_i);
 
-  check_jacobian(vo_q, Twb);
+    // residual = z - h(x_i)
+    Eigen::Matrix<double, kMeasDim, 1> residual;
+    residual.topRows(3) = Tvo.translation() - Twb_in_V.translation();
+    residual.bottomRows(3) = measurement_res(Tvo, Twb_in_V);
 
-  Eigen::Matrix<double, kMeasDim, kMeasDim> R =
-      Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
-  kf_ptr_->update_measurement(H, R, residual, kf_ptr_->kAngError_);
+    // residual -= H (x_prior - x_i)
+    Eigen::Matrix<double, kStateDim, 1> delta_x;
+    delta_x.block<3, 1>(0, 0) = kf_ptr_->state_ptr_->p_GI - kf_ptr_->state_ptr_->p_GI_i;
+    delta_x.block<3, 1>(3, 0) = kf_ptr_->state_ptr_->v_GI - kf_ptr_->state_ptr_->v_GI_i;
+    Eigen::Quaterniond q_res = Eigen::Quaterniond(kf_ptr_->state_ptr_->r_GI_i.transpose() * kf_ptr_->state_ptr_->r_GI);
+    delta_x.block<3, 1>(6, 0) = 2.0 * q_res.vec() / q_res.w();
+    delta_x.block<3, 1>(9, 0) = kf_ptr_->state_ptr_->acc_bias - kf_ptr_->state_ptr_->acc_bias_i;
+    delta_x.block<3, 1>(12, 0) = kf_ptr_->state_ptr_->gyr_bias - kf_ptr_->state_ptr_->gyr_bias_i;
+    residual -= H_i * delta_x;
+
+    std::cout << "res: " << residual.transpose() << std::endl;
+
+    check_jacobian(vo_q, Twb_i);
+
+    kf_ptr_->update_measurement(H_i, R, residual, i, n_ite, kf_ptr_->kAngError_);
+  }
 
   std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;

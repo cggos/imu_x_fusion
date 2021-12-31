@@ -54,6 +54,13 @@ class KF {
     Eigen::Vector3d acc_bias;
     Eigen::Vector3d gyr_bias;
 
+    // IEKF
+    Eigen::Vector3d p_GI_i;
+    Eigen::Vector3d v_GI_i;
+    Eigen::Matrix3d r_GI_i;
+    Eigen::Vector3d acc_bias_i;
+    Eigen::Vector3d gyr_bias_i;
+
     double timestamp;
 
     State() {
@@ -62,9 +69,26 @@ class KF {
       p_GI.setZero();
       v_GI.setZero();
       r_GI.setIdentity();
-
       acc_bias.setZero();
       gyr_bias.setZero();
+
+      update_iekf();
+    }
+
+    void update_iekf(bool flag = true) {
+      if (flag) {
+        p_GI_i = p_GI;
+        v_GI_i = v_GI;
+        r_GI_i = r_GI;
+        acc_bias_i = acc_bias;
+        gyr_bias_i = gyr_bias;
+      } else {
+        p_GI = p_GI_i;
+        v_GI = v_GI_i;
+        r_GI = r_GI_i;
+        acc_bias = acc_bias_i;
+        gyr_bias = gyr_bias_i;
+      }
     }
   };
   using StatePtr = std::shared_ptr<State>;
@@ -200,12 +224,19 @@ class KF {
   void update_measurement(const Eigen::MatrixBase<H_type> &H,
                           const Eigen::MatrixBase<R_type> &V,
                           const Eigen::MatrixBase<Res_type> &r,
+                          int i = 0,
+                          int n = 1,
                           const ANGULAR_ERROR &ang_error = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
     EIGEN_STATIC_ASSERT_FIXED_SIZE(H_type);
     EIGEN_STATIC_ASSERT_FIXED_SIZE(R_type);
 
-    // compute K
+    // get prior state
+    if (i == 0 && n == 1) state_ptr_->update_iekf();
+
+    // get prior covariance
     const MatrixSD &P = state_ptr_->cov;
+
+    // K
     const R_type S = H * P * H.transpose() + V;
     const Eigen::Matrix<double, kStateDim, R_type::RowsAtCompileTime> K = P * H.transpose() * S.inverse();
 
@@ -213,27 +244,30 @@ class KF {
     const Eigen::Matrix<double, kStateDim, 1> delta_x = K * r;
 
     // update: nominal-state + observation error
-    state_ptr_->p_GI += delta_x.block<3, 1>(0, 0);
-    state_ptr_->v_GI += delta_x.block<3, 1>(3, 0);
+    state_ptr_->p_GI_i = state_ptr_->p_GI + delta_x.block<3, 1>(0, 0);
+    state_ptr_->v_GI_i = state_ptr_->v_GI + delta_x.block<3, 1>(3, 0);
     const Eigen::Vector3d &dR = delta_x.block<3, 1>(6, 0);
     if (dR.norm() > DBL_EPSILON) {
       Eigen::Matrix3d deltaR = Eigen::AngleAxisd(dR.norm(), dR.normalized()).toRotationMatrix();
       switch (ang_error) {
         case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
-          state_ptr_->r_GI *= deltaR;
+          state_ptr_->r_GI_i = state_ptr_->r_GI * deltaR;
           break;
         case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
-          state_ptr_->r_GI = deltaR * state_ptr_->r_GI;
-          // state_ptr_->r_GI *= deltaR;
+          state_ptr_->r_GI_i = deltaR * state_ptr_->r_GI;
           break;
       }
     }
-    state_ptr_->acc_bias += delta_x.block<3, 1>(9, 0);
-    state_ptr_->gyr_bias += delta_x.block<3, 1>(12, 0);
+    state_ptr_->acc_bias_i = state_ptr_->acc_bias + delta_x.block<3, 1>(9, 0);
+    state_ptr_->gyr_bias_i = state_ptr_->gyr_bias + delta_x.block<3, 1>(12, 0);
 
-    // update: error-state covariance
-    const MatrixSD I_KH = MatrixSD::Identity() - K * H;
-    state_ptr_->cov = I_KH * P * I_KH.transpose() + K * V * K.transpose();
+    if (i == n - 1) {
+      state_ptr_->update_iekf(false);
+
+      // update: error-state covariance
+      const MatrixSD I_KH = MatrixSD::Identity() - K * H;
+      state_ptr_->cov = I_KH * P * I_KH.transpose() + K * V * K.transpose();
+    }
   }
 
   bool init_rot_from_imudata(Eigen::Matrix3d &r_GI, const std::deque<ImuDataConstPtr> &imu_buf) {
