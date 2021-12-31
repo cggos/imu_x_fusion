@@ -124,9 +124,12 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   H.block<3, 3>(0, 6) = -r_GI * cg::skew_matrix(I_p_Gps_);
 
   // measurement covariance
-  const Eigen::Matrix3d &V = gps_data_ptr->cov;
+  const Eigen::Matrix3d &R = gps_data_ptr->cov;
 
-  kf_ptr_->update_measurement(H, V, residual);
+  Eigen::Matrix<double, kStateDim, 3> K;
+  kf_ptr_->update_K(H, R, K);
+  kf_ptr_->update_P(H, R, K);
+  *kf_ptr_->state_ptr_ = *kf_ptr_->state_ptr_ + K * residual;
 
   publish_save_state();
 
@@ -164,7 +167,7 @@ void FusionNode::publish_save_state() {
   path_pub_.publish(nav_path_);
 
   // save state p q lla
-  std::shared_ptr<KF::State> kf_state(kf_ptr_->state_ptr_);
+  std::shared_ptr<State> kf_state(kf_ptr_->state_ptr_);
   Eigen::Vector3d lla;
   cg::enu2lla(init_lla_, kf_state->p_GI, &lla);  // convert ENU state to lla
   const Eigen::Quaterniond q_GI(kf_state->r_GI);

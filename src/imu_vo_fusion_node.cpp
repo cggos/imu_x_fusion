@@ -58,8 +58,6 @@ class FusionNode {
 
   Eigen::Matrix<double, kMeasDim, kStateDim> measurementH(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T);
 
-  Eigen::Vector3d measurement_res(const Eigen::Isometry3d &Tobs, const Eigen::Isometry3d &Test);
-
   void check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T);
 
   void publish();
@@ -81,19 +79,6 @@ class FusionNode {
 
   KFPtr kf_ptr_;
 };
-
-Eigen::Vector3d FusionNode::measurement_res(const Eigen::Isometry3d &Tobs, const Eigen::Isometry3d &Test) {
-  Eigen::Quaterniond q_res;
-  switch (kf_ptr_->kRotPerturbation_) {
-    case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
-      q_res = Eigen::Quaterniond(Test.linear().transpose() * Tobs.linear());
-      break;
-    case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
-      q_res = Eigen::Quaterniond(Tobs.linear() * Test.linear().transpose());
-      break;
-  }
-  return 2.0 * q_res.vec() / q_res.w();
-}
 
 /**
  * @brief h(x)/delta X
@@ -121,13 +106,10 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
       H.block<3, 3>(0, 6) = -Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
 
       Eigen::Matrix4d m4;
-      switch (kf_ptr_->kRotPerturbation_) {
-        case ROTATION_PERTURBATION::LOCAL_PERTURBATION:
-          m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
-          break;
-        case ROTATION_PERTURBATION::GLOBAL_PERTURBATION:
-          m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * q_cb.conjugate()).normalized());
-          break;
+      if (kf_ptr_->kRotPerturbation_ == ROTATION_PERTURBATION::LOCAL_PERTURBATION) {
+        m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
+      } else {
+        m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * q_cb.conjugate()).normalized());
       }
       H.block<3, 3>(3, 6) = m4.block<3, 3>(1, 1);
     } break;
@@ -138,7 +120,7 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
       H.block<3, 3>(0, 6) = Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
 
       Eigen::Matrix4d m4;
-      if (kf_ptr_->kAngError_ == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
+      if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
         // LOCAL_PERTURBATION
         m4 = quat_left_matrix((vo_q.conjugate() * q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
       } else {
@@ -172,6 +154,9 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
   Tvo.linear() = vo_q.toRotationMatrix();
   Tvo.translation() = vo_p;
 
+  const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
+      Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
+
   if (!kf_ptr_->initialized_) {
     if (kf_ptr_->imu_buf_.size() < kf_ptr_->kImuBufSize) {
       printf("[cggos %s] ERROR: Not Enough IMU data for Initialization!!!\n", __FUNCTION__);
@@ -201,31 +186,46 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     return;
   }
 
-  Eigen::Isometry3d Twb;
-  Twb.linear() = kf_ptr_->state_ptr_->r_GI;
-  Twb.translation() = kf_ptr_->state_ptr_->p_GI;
-
   // for publish, Tvo in frame W --> Tb0bn
   TvoB = Tvw.inverse() * Tvo * Tcb;
 
-  // measurement, Twb in frame V --> Tc0cn
-  Eigen::Isometry3d Twb_in_V = Tvw * Twb * Tcb.inverse();
+  // IEKF iteration update, same with EKF when n_ite = 1
+  int n_ite = 10;
+  Eigen::Matrix<double, kMeasDim, kStateDim> H_i;
+  Eigen::Matrix<double, kStateDim, kMeasDim> K_i;
+  for (int i = 0; i < n_ite; i++) {
+    if (i == 0) *kf_ptr_->state_ptr_i_ = *kf_ptr_->state_ptr_;
 
-  // residual
-  Eigen::Matrix<double, kMeasDim, 1> residual;
-  residual.topRows(3) = Tvo.translation() - Twb_in_V.translation();
-  residual.bottomRows(3) = measurement_res(Tvo, Twb_in_V);
+    // x_i
+    const Eigen::Isometry3d &Twb_i = kf_ptr_->state_ptr_i_->pose();
 
-  std::cout << "res: " << residual.transpose() << std::endl;
+    // measurement estimation h(x_i), Twb in frame V --> Tc0cn
+    const Eigen::Isometry3d &Twb_in_V = Tvw * Twb_i * Tcb.inverse();
 
-  // jacobian
-  auto H = measurementH(vo_q, Twb);
+    // measurement jacobian H
+    H_i = measurementH(vo_q, Twb_i);
 
-  check_jacobian(vo_q, Twb);
+    // for debug
+    check_jacobian(vo_q, Twb_i);
 
-  Eigen::Matrix<double, kMeasDim, kMeasDim> R =
-      Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
-  kf_ptr_->update_measurement(H, R, residual, kf_ptr_->kAngError_);
+    // residual = z - h(x_i)
+    Eigen::Matrix<double, kMeasDim, 1> residual;
+    residual.topRows(3) = Tvo.translation() - Twb_in_V.translation();
+    residual.bottomRows(3) = State::rotation_residual(Tvo.linear(), Twb_in_V.linear());
+
+    // residual -= H (x_prior - x_i)
+    Eigen::Matrix<double, kStateDim, 1> delta_x = *kf_ptr_->state_ptr_ - *kf_ptr_->state_ptr_i_;
+    residual -= H_i * delta_x;
+
+    std::cout << "res: " << residual.transpose() << std::endl;
+
+    kf_ptr_->update_K(H_i, R, K_i);
+    *kf_ptr_->state_ptr_i_ = *kf_ptr_->state_ptr_ + K_i * residual;
+  }
+
+  // update state and cov
+  *kf_ptr_->state_ptr_ = *kf_ptr_->state_ptr_i_;
+  kf_ptr_->update_P(H_i, R, K_i);
 
   std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
@@ -245,7 +245,7 @@ void FusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Iso
   delta_q.w() = 1;
   delta_q.vec() = 0.5 * delta;
   Eigen::Isometry3d T2 = Twb;
-  switch (kf_ptr_->kAngError_) {
+  switch (State::kAngError) {
     case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
       T2.linear() *= delta_q.toRotationMatrix();
       break;
@@ -268,7 +268,8 @@ void FusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Iso
   std::cout << "(purt R) p res: " << (TvoN2.translation() - Twb_in_V.translation()).transpose() << std::endl;
   std::cout << "(purt R) p Hx: " << (H2.block<3, 3>(0, 6) * delta).transpose() << std::endl;
 
-  std::cout << "(purt R) q res: " << measurement_res(TvoN2, Twb_in_V).transpose() << std::endl;
+  std::cout << "(purt R) q res: " << State::rotation_residual(TvoN2.linear(), Twb_in_V.linear()).transpose()
+            << std::endl;
   std::cout << "(purt R) q Hx: " << (H2.block<3, 3>(3, 6) * delta).transpose() << std::endl;
   std::cout << "---------------------" << std::endl;
 }

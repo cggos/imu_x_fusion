@@ -5,7 +5,7 @@
 
 * IMU + VO (Stereo)
   - [x] ESKF: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
-  - [ ] IEKF
+  - [x] IEKF: https://cggos.github.io/map-mle-ols-gn-iekf-ekf.html#iekf
   - [ ] UKF
 
 -----
@@ -143,7 +143,7 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
   - [x] VO (Stereo)
 * State Estimation
   - [x] EKF(ESKF)
-  - [ ] IEKF
+  - [x] IEKF
   - [ ] UKF
   - [ ] Particle Filter
   - [ ] GN/LM
