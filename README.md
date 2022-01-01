@@ -129,9 +129,13 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
   - [ ] Manometer
   - [x] GPS
   - [x] VO (Stereo)
+
 * State Estimation
   - [x] EKF(ESKF)
   - [x] IEKF
   - [ ] UKF
   - [ ] Particle Filter
   - [ ] GN/LM
+
+* Debug
+  - [x] Check Jacobian Matrix for EKF(ESKF) and IEKF

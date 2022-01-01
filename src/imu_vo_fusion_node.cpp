@@ -232,35 +232,24 @@ void FusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Iso
   T1.translation() += delta;
 
   // perturbation on R
-  Eigen::Quaterniond delta_q;
-  delta_q.w() = 1;
-  delta_q.vec() = 0.5 * delta;
   Eigen::Isometry3d T2 = Twb;
-  switch (State::kAngError) {
-    case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
-      T2.linear() *= delta_q.toRotationMatrix();
-      break;
-    case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
-      T2.linear() = delta_q.toRotationMatrix() * T2.linear();
-      break;
-  }
+  T2.linear() = State::rotation_update(T2.linear(), State::delta_rot_mat(delta, 1));
 
-  Eigen::Isometry3d TvoN1 = Tvw * T1 * Tcb.inverse();
-  Eigen::Isometry3d TvoN2 = Tvw * T2 * Tcb.inverse();
-  Eigen::Isometry3d Twb_in_V = Tvw * Twb * Tcb.inverse();
+  Eigen::Isometry3d Tx0 = Tvw * Twb * Tcb.inverse();
+  Eigen::Isometry3d Tx1 = Tvw * T1 * Tcb.inverse();
+  Eigen::Isometry3d Tx2 = Tvw * T2 * Tcb.inverse();
 
   auto H1 = measurementH(vo_q, T1);
   auto H2 = measurementH(vo_q, T2);
 
   std::cout << "---------------------" << std::endl;
-  std::cout << "(purt t) p res: " << (TvoN1.translation() - Twb_in_V.translation()).transpose() << std::endl;
+  std::cout << "(purt t) p res: " << (Tx1.translation() - Tx0.translation()).transpose() << std::endl;
   std::cout << "(purt t) p Hx: " << (H1.block<3, 3>(0, 0) * delta).transpose() << std::endl;
 
-  std::cout << "(purt R) p res: " << (TvoN2.translation() - Twb_in_V.translation()).transpose() << std::endl;
+  std::cout << "(purt R) p res: " << (Tx2.translation() - Tx0.translation()).transpose() << std::endl;
   std::cout << "(purt R) p Hx: " << (H2.block<3, 3>(0, 6) * delta).transpose() << std::endl;
 
-  std::cout << "(purt R) q res: " << State::rotation_residual(TvoN2.linear(), Twb_in_V.linear()).transpose()
-            << std::endl;
+  std::cout << "(purt R) q res: " << State::rotation_residual(Tx2.linear(), Tx0.linear()).transpose() << std::endl;
   std::cout << "(purt R) q Hx: " << (H2.block<3, 3>(3, 6) * delta).transpose() << std::endl;
   std::cout << "---------------------" << std::endl;
 }
