@@ -9,7 +9,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "imu_x_fusion/gnss.h"
+#include "imu_x_fusion/gnss.hpp"
 #include "imu_x_fusion/kf.hpp"
 
 namespace cg {
@@ -131,11 +131,13 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   kf_ptr_->update_P(H, R, K);
   *kf_ptr_->state_ptr_ = *kf_ptr_->state_ptr_ + K * residual;
 
-  publish_save_state();
+  // save data
+  {
+    publish_save_state();
 
-  // save gps lla
-  file_gps_ << std::fixed << std::setprecision(15) << gps_data_ptr->timestamp << ", " << gps_data_ptr->lla[0] << ", "
-            << gps_data_ptr->lla[1] << ", " << gps_data_ptr->lla[2] << std::endl;
+    file_gps_ << std::fixed << std::setprecision(15) << gps_data_ptr->timestamp << ", " << gps_data_ptr->lla[0] << ", "
+              << gps_data_ptr->lla[1] << ", " << gps_data_ptr->lla[2] << std::endl;
+  }
 }
 
 void FusionNode::publish_save_state() {

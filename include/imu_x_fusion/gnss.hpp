@@ -1,19 +1,10 @@
 #pragma once
 
-#include <Eigen/Core>
 #include <GeographicLib/LocalCartesian.hpp>
-#include <memory>
+
+#include "imu_x_fusion/types.hpp"
 
 namespace cg {
-
-struct GpsData {
-  double timestamp;
-
-  Eigen::Vector3d lla;  // Latitude in degree, longitude in degree, and altitude in meter
-  Eigen::Matrix3d cov;  // Covariance in m^2
-};
-using GpsDataPtr = std::shared_ptr<GpsData>;
-using GpsDataConstPtr = std::shared_ptr<const GpsData>;
 
 inline void lla2enu(const Eigen::Vector3d &init_lla, const Eigen::Vector3d &point_lla, Eigen::Vector3d *point_enu) {
   static GeographicLib::LocalCartesian local_cartesian;

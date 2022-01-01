@@ -1,5 +1,9 @@
 #pragma once
 
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+#include <memory>
+
 namespace cg {
 
 constexpr int kStateDim = 15;
@@ -18,10 +22,7 @@ using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
  * @ref JoanSola ESKF 7.
  *
  */
-enum ANGULAR_ERROR {
-  LOCAL_ANGULAR_ERROR,
-  GLOBAL_ANGULAR_ERROR
-};  // local or global angular error, ref: JoanSola ESKF 7.
+enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
 
 enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
 
@@ -32,6 +33,15 @@ struct ImuData {
 };
 using ImuDataPtr = std::shared_ptr<ImuData>;
 using ImuDataConstPtr = std::shared_ptr<const ImuData>;
+
+struct GpsData {
+  double timestamp;
+
+  Eigen::Vector3d lla;  // Latitude in degree, longitude in degree, and altitude in meter
+  Eigen::Matrix3d cov;  // Covariance in m^2
+};
+using GpsDataPtr = std::shared_ptr<GpsData>;
+using GpsDataConstPtr = std::shared_ptr<const GpsData>;
 
 class State {
  public:
