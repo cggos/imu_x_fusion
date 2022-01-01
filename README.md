@@ -137,16 +137,11 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
   - [ ] Particle Filter
   - [ ] GN/LM
 
-* Local / Global Rotation Perturbation
-  - [x] Local Angular Error with Local Rotation Perturbation (OK)
-  - [x] Global Angular Error with Global Rotation Perturbation
+* Local / Global Angular Error (Rotation Perturbation)
+  - [x] Local Angular Error (OK)
+  - [x] Global Angular Error (TODO: why Poor)
   ```cpp
-  enum ANGULAR_ERROR {
-    LOCAL_ANGULAR_ERROR,
-    GLOBAL_ANGULAR_ERROR
-  };  // local or global angular error, ref: JoanSola ESKF 7.
-
-  enum ROTATION_PERTURBATION { LOCAL_PERTURBATION, GLOBAL_PERTURBATION };  // local or global rotation perturbation
+  enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
   ```
 
 * Debug

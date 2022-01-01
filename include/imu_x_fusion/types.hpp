@@ -22,10 +22,7 @@ using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
  * @ref JoanSola ESKF 7.
  *
  */
-enum ANGULAR_ERROR {
-  LOCAL_ANGULAR_ERROR,
-  GLOBAL_ANGULAR_ERROR
-};  // local or global angular error, ref: JoanSola ESKF 7.
+enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
 
 enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
 
