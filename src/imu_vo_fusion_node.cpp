@@ -101,37 +101,28 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
   switch (kf_ptr_->kJacobMeasurement_) {
     case JACOBIAN_MEASUREMENT::HX_X: {
       H.block<3, 3>(0, 0) = Rvw;
-
-      // LOCAL_PERTURBATION
-      H.block<3, 3>(0, 6) = -Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
-
-      Eigen::Matrix4d m4;
-      if (kf_ptr_->kRotPerturbation_ == ROTATION_PERTURBATION::LOCAL_PERTURBATION) {
-        m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
+      if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
+        H.block<3, 3>(0, 6) = -Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
+        H.block<3, 3>(3, 6) =
+            (quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate())).block<3, 3>(1, 1);
       } else {
-        m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * q_cb.conjugate()).normalized());
+        H.block<3, 3>(0, 6) = -Rvw * skew_matrix(T.linear() * Tcb.inverse().translation());
+        H.block<3, 3>(3, 6) =
+            (quat_left_matrix(q_vw) * quat_right_matrix((q * q_cb.conjugate()).normalized())).block<3, 3>(1, 1);
       }
-      H.block<3, 3>(3, 6) = m4.block<3, 3>(1, 1);
     } break;
     case JACOBIAN_MEASUREMENT::NEGATIVE_RX_X: {
-      H.block<3, 3>(0, 0) = -Rvw;
-
-      // LOCAL_PERTURBATION
-      H.block<3, 3>(0, 6) = Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
-
       Eigen::Matrix4d m4;
+      H.block<3, 3>(0, 0) = -Rvw;
       if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
-        // LOCAL_PERTURBATION
+        H.block<3, 3>(0, 6) = Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
         m4 = quat_left_matrix((vo_q.conjugate() * q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
+        H.block<3, 3>(3, 6) = -m4.block<3, 3>(1, 1);
       } else {
-        if (kf_ptr_->kRotPerturbation_ == ROTATION_PERTURBATION::LOCAL_PERTURBATION) {
-          m4 = quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix((vo_q * q_cb).conjugate().normalized());
-        } else {
-          m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * (vo_q * q_cb).conjugate()).normalized());
-        }
+        H.block<3, 3>(0, 6) = -Rvw * skew_matrix(T.linear() * Tcb.inverse().translation());
+        m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * (vo_q * q_cb).conjugate()).normalized());
+        H.block<3, 3>(3, 6) = -m4.block<3, 3>(1, 1);
       }
-      H.block<3, 3>(3, 6) = -m4.block<3, 3>(1, 1);
-
       H *= -1.0;
     } break;
   }
