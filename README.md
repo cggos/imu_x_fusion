@@ -39,7 +39,7 @@ mkdir -p ws_msf/src
 cd ws_msf/src
 git clone xxx
 cd ..
-catkin_make -j4 # error happened when using the default cmake 3.5.1, upgrade it
+catkin_make -j4 # error happened when using the default cmake 3.5.1 on Ubuntu 16.04, upgrade it
 # or
 catkin build -j4
 ```
@@ -123,18 +123,6 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
 
 ## Features
 
-* Local / Global Rotation Perturbation
-  - [x] Local Angular Error with Local Rotation Perturbation (OK)
-  - [x] Global Angular Error with Global Rotation Perturbation
-  ```cpp
-  enum ANGULAR_ERROR {
-    LOCAL_ANGULAR_ERROR,
-    GLOBAL_ANGULAR_ERROR
-  };  // local or global angular error, ref: JoanSola ESKF 7.
-
-  enum ROTATION_PERTURBATION { LOCAL_PERTURBATION, GLOBAL_PERTURBATION };  // local or global rotation perturbation
-  ```
-
 * Sensors
   - [x] IMU
   - [ ] Wheel Odometer
@@ -148,6 +136,18 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
   - [ ] UKF
   - [ ] Particle Filter
   - [ ] GN/LM
+
+* Local / Global Rotation Perturbation
+  - [x] Local Angular Error with Local Rotation Perturbation (OK)
+  - [x] Global Angular Error with Global Rotation Perturbation
+  ```cpp
+  enum ANGULAR_ERROR {
+    LOCAL_ANGULAR_ERROR,
+    GLOBAL_ANGULAR_ERROR
+  };  // local or global angular error, ref: JoanSola ESKF 7.
+
+  enum ROTATION_PERTURBATION { LOCAL_PERTURBATION, GLOBAL_PERTURBATION };  // local or global rotation perturbation
+  ```
 
 * Debug
   - [x] Check Jacobian Matrix for EKF(ESKF) and IEKF

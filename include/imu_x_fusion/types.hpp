@@ -1,5 +1,9 @@
 #pragma once
 
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+#include <memory>
+
 namespace cg {
 
 constexpr int kStateDim = 15;
@@ -32,6 +36,15 @@ struct ImuData {
 };
 using ImuDataPtr = std::shared_ptr<ImuData>;
 using ImuDataConstPtr = std::shared_ptr<const ImuData>;
+
+struct GpsData {
+  double timestamp;
+
+  Eigen::Vector3d lla;  // Latitude in degree, longitude in degree, and altitude in meter
+  Eigen::Matrix3d cov;  // Covariance in m^2
+};
+using GpsDataPtr = std::shared_ptr<GpsData>;
+using GpsDataConstPtr = std::shared_ptr<const GpsData>;
 
 class State {
  public:
