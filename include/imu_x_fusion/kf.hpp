@@ -1,132 +1,9 @@
 #pragma once
 
+#include "imu_x_fusion/types.hpp"
 #include "imu_x_fusion/utils.h"
 
 namespace cg {
-
-constexpr int kStateDim = 15;
-constexpr int kNoiseDim = 12;
-constexpr double kG = 9.81007;
-
-const double kDegreeToRadian = M_PI / 180.;
-
-using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
-
-enum ANGULAR_ERROR {
-  LOCAL_ANGULAR_ERROR,
-  GLOBAL_ANGULAR_ERROR
-};  // local or global angular error, ref: JoanSola ESKF 7.
-
-enum ROTATION_PERTURBATION { LOCAL_PERTURBATION, GLOBAL_PERTURBATION };  // local or global rotation perturbation
-
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
-
-struct ImuData {
-  double timestamp;
-
-  Eigen::Vector3d acc;
-  Eigen::Vector3d gyr;
-};
-using ImuDataPtr = std::shared_ptr<ImuData>;
-using ImuDataConstPtr = std::shared_ptr<const ImuData>;
-
-class State {
- public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-  // error-state
-  MatrixSD cov;
-
-  // nominal-state
-  Eigen::Vector3d p_GI;
-  Eigen::Vector3d v_GI;
-  Eigen::Matrix3d r_GI;
-  Eigen::Vector3d acc_bias;
-  Eigen::Vector3d gyr_bias;
-
-  double timestamp;
-
-  static ANGULAR_ERROR kAngError;
-
-  State() {
-    cov.setZero();
-
-    p_GI.setZero();
-    v_GI.setZero();
-    r_GI.setIdentity();
-    acc_bias.setZero();
-    gyr_bias.setZero();
-  }
-
-  const Eigen::Isometry3d pose() const {
-    Eigen::Isometry3d Twb;
-    Twb.linear() = r_GI;
-    Twb.translation() = p_GI;
-    return Twb;
-  }
-
-  State &operator=(const State &rhs) {
-    if (this == &rhs) return *this;
-    p_GI = rhs.p_GI;
-    v_GI = rhs.v_GI;
-    r_GI = rhs.r_GI;
-    acc_bias = rhs.acc_bias;
-    gyr_bias = rhs.gyr_bias;
-    return *this;
-  }
-
-  State operator+(const Eigen::Matrix<double, kStateDim, 1> &delta_x) const {
-    State state;
-    state.p_GI = this->p_GI + delta_x.block<3, 1>(0, 0);
-    state.v_GI = this->v_GI + delta_x.block<3, 1>(3, 0);
-    const Eigen::Vector3d &dR = delta_x.block<3, 1>(6, 0);
-    if (dR.norm() > DBL_EPSILON) {
-      const Eigen::Matrix3d &deltaR = Eigen::AngleAxisd(dR.norm(), dR.normalized()).toRotationMatrix();
-      switch (kAngError) {
-        case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
-          state.r_GI = this->r_GI * deltaR;
-          break;
-        case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
-          state.r_GI = deltaR * this->r_GI;
-          break;
-      }
-    }
-    state.acc_bias = this->acc_bias + delta_x.block<3, 1>(9, 0);
-    state.gyr_bias = this->gyr_bias + delta_x.block<3, 1>(12, 0);
-    return state;
-  }
-
-  Eigen::Matrix<double, kStateDim, 1> operator-(const State &rhs) const {
-    Eigen::Matrix<double, kStateDim, 1> delta_x;
-    delta_x.block<3, 1>(0, 0) = this->p_GI - rhs.p_GI;
-    delta_x.block<3, 1>(3, 0) = this->v_GI - rhs.v_GI;
-    delta_x.block<3, 1>(6, 0) = rotation_residual(this->r_GI, rhs.r_GI);
-    delta_x.block<3, 1>(9, 0) = this->acc_bias - rhs.acc_bias;
-    delta_x.block<3, 1>(12, 0) = this->gyr_bias - rhs.gyr_bias;
-    return delta_x;
-  }
-
-  /**
-   * @brief Robs - Rest
-   *
-   * @param Robs
-   * @param Rest
-   * @return Eigen::Vector3d
-   */
-  static Eigen::Vector3d rotation_residual(const Eigen::Matrix3d &Robs, const Eigen::Matrix3d &Rest) {
-    Eigen::Quaterniond q_res;
-    switch (kAngError) {
-      case ANGULAR_ERROR::LOCAL_ANGULAR_ERROR:
-        q_res = Eigen::Quaterniond(Rest.transpose() * Robs);
-        break;
-      case ANGULAR_ERROR::GLOBAL_ANGULAR_ERROR:
-        q_res = Eigen::Quaterniond(Robs * Rest.transpose());
-        break;
-    }
-    return 2.0 * q_res.vec() / q_res.w();
-  }
-};
-using StatePtr = std::shared_ptr<State>;
 
 ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;
 
@@ -135,8 +12,6 @@ class KF {
   StatePtr state_ptr_;
   StatePtr state_ptr_i_;  // for IEKF
 
-  // const ANGULAR_ERROR kAngError_ = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;
-  const ROTATION_PERTURBATION kRotPerturbation_ = ROTATION_PERTURBATION::LOCAL_PERTURBATION;
   const JACOBIAN_MEASUREMENT kJacobMeasurement_ = JACOBIAN_MEASUREMENT::HX_X;
 
   bool initialized_ = false;
@@ -199,7 +74,6 @@ class KF {
 
   /**
    * @brief predict procedure
-   * @ref ESKF 5.4: System kinematics in discrete time
    * @param last_imu
    * @param curr_imu
    */
@@ -222,16 +96,14 @@ class KF {
     const Eigen::Vector3d acc_nominal = last_state.r_GI * acc_unbias + Eigen::Vector3d(0, 0, -kG);
     state_ptr_->p_GI = last_state.p_GI + last_state.v_GI * dt + 0.5 * acc_nominal * dt2;
     state_ptr_->v_GI = last_state.v_GI + acc_nominal * dt;
-    const Eigen::Vector3d delta_angle_axis = gyr_unbias * dt;
-    double norm_delta_angle = delta_angle_axis.norm();
-    Eigen::Matrix3d dR = Eigen::Matrix3d::Identity();
-    if (norm_delta_angle > DBL_EPSILON) {
-      dR = Eigen::AngleAxisd(norm_delta_angle, delta_angle_axis.normalized()).toRotationMatrix();
-      state_ptr_->r_GI = last_state.r_GI * dR;
-    }
+    const auto &dR = State::delta_rot_mat(gyr_unbias * dt);
+    state_ptr_->r_GI = State::rotation_update(last_state.r_GI, dR);
 
     //
-    // ESKF 5.4.3 The error-state Jacobian and perturbation matrices
+    // ESKF
+    // 5.4.3 (local angular error)
+    // 7.2.3 (global angular error)
+    // The error-state Jacobian and perturbation matrices
     //
 
     // Fx
@@ -239,12 +111,12 @@ class KF {
     Fx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * dt;
     Fx.block<3, 3>(3, 6) = -state_ptr_->r_GI * cg::skew_matrix(acc_unbias) * dt;
     Fx.block<3, 3>(3, 9) = -state_ptr_->r_GI * dt;
-    if (norm_delta_angle > DBL_EPSILON) {
+    if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
       Fx.block<3, 3>(6, 6) = dR.transpose();
+      Fx.block<3, 3>(6, 12) = -Eigen::Matrix3d::Identity() * dt;
     } else {
-      Fx.block<3, 3>(6, 6).setIdentity();
+      Fx.block<3, 3>(6, 12) = -state_ptr_->r_GI * dt;
     }
-    Fx.block<3, 3>(6, 12) = -Eigen::Matrix3d::Identity() * dt;
 
     // Fi
     Eigen::Matrix<double, kStateDim, kNoiseDim> Fi = Eigen::Matrix<double, kStateDim, kNoiseDim>::Zero();
