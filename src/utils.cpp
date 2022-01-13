@@ -1,5 +1,8 @@
 #include "imu_x_fusion/utils.h"
 
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/core/eigen.hpp>
+
 namespace cg {
 
 Eigen::Isometry3d getTransformEigen(const ros::NodeHandle &nh, const std::string &field) {
@@ -74,6 +77,12 @@ cv::Mat getKalibrStyleTransform(const ros::NodeHandle &nh, const std::string &fi
   return T;
 }
 
+Eigen::Matrix3d skew_matrix(const Eigen::Vector3d &v) {
+  Eigen::Matrix3d w;
+  w << 0., -v(2), v(1), v(2), 0., -v(0), -v(1), v(0), 0.;
+  return w;
+}
+
 Eigen::Matrix4d quat_left_matrix(const Eigen::Quaterniond &q) {
   Eigen::Matrix4d m4 = Eigen::Matrix4d::Zero();
   m4.block<3, 1>(1, 0) = q.vec();
@@ -90,6 +99,19 @@ Eigen::Matrix4d quat_right_matrix(const Eigen::Quaterniond &q) {
   m4.block<3, 3>(1, 1) = -skew_matrix(q.vec());
   m4 += Eigen::Matrix4d::Identity() * q.w();
   return m4;
+}
+
+Eigen::Vector3d rot_mat_to_vec(const Eigen::Matrix3d &R) {
+  Eigen::Vector3d vec_r;
+  cv::Mat Rmat, rvec;
+  cv::eigen2cv(R, Rmat);
+  cv::Rodrigues(Rmat, rvec);
+  cv::cv2eigen(rvec, vec_r);
+  return vec_r;
+}
+
+Eigen::Matrix3d rot_vec_to_mat(const Eigen::Vector3d &rvec) {
+  return Eigen::AngleAxisd(rvec.norm(), rvec.normalized()).toRotationMatrix();
 }
 
 }  // namespace cg

@@ -1,5 +1,6 @@
 <launch>
     <arg name="rviz" default="true"/>
+    <arg name="filter" default="ukf"/>
 
     <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-euroc.yaml" />
 
@@ -15,9 +16,17 @@
     <param name="topic_vo" value="/pose_orbslam" />
     <param name="topic_imu" value="/imu0" />
     
-    <node name="imu_vo_fusion_node" pkg="imu_x_fusion" type="imu_vo_fusion_node" output="screen">
-      <rosparam command="load" file="$(arg calibration_file)"/>
-    </node>
+    <group if="$(eval filter == 'ekf')">
+      <node name="imu_vo_fusion_node" pkg="imu_x_fusion" type="imu_vo_fusion_node" output="screen">
+        <rosparam command="load" file="$(arg calibration_file)"/>
+      </node>
+    </group>
+
+    <group if="$(eval filter == 'ukf')">
+      <node name="imu_vo_ukf_node" pkg="imu_x_fusion" type="imu_vo_ukf_node" output="screen">
+        <rosparam command="load" file="$(arg calibration_file)"/>
+      </node>
+    </group>    
 
     <group if="$(arg rviz)">
       <node pkg="rviz" type="rviz" name="rviz" output="screen" 
