@@ -4,6 +4,7 @@
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
 
+#include <boost/math/distributions/chi_squared.hpp>
 #include <iostream>
 
 #include "imu_x_fusion/ukf.hpp"
@@ -48,6 +49,11 @@ class UKFFusionNode {
     odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom_est", 10);
 
     Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
+
+    for (int i = 1; i < 100; ++i) {
+      boost::math::chi_squared chi_squared_dist(i);
+      chi_squared_test_table_[i] = boost::math::quantile(chi_squared_dist, 0.05);
+    }
   }
 
   ~UKFFusionNode() {}
@@ -72,6 +78,8 @@ class UKFFusionNode {
   Eigen::Isometry3d TvoB;  // for publish
 
   UKFPtr ukf_ptr_;
+
+  std::map<int, double> chi_squared_test_table_;
 };
 
 void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg) {
@@ -139,14 +147,14 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     // measurement estimation h(x), Twb in frame V --> Tc0cn
     const Eigen::Isometry3d &Twb_in_V = Tvw * Twb * Tcb.inverse();
 
-    predicted_meas_sp_mat.col(i).head(3) = Twb_in_V.translation();
-    predicted_meas_sp_mat.col(i).bottomRows(3) = rot_mat_to_vec(Twb_in_V.linear());
+    predicted_meas_sp_mat.col(i).segment<3>(0) = Twb_in_V.translation();
+    predicted_meas_sp_mat.col(i).segment<3>(3) = rot_mat_to_vec(Twb_in_V.linear());
   }
 
   // predict measurement mean
   Eigen::VectorXd predicted_z = Eigen::VectorXd::Zero(kMeasDim);
   for (int c = 0; c < kSigmaPointsNum; c++) {
-    predicted_z += ukf_ptr_->weights_[c] * predicted_meas_sp_mat.col(c);
+    predicted_z += ukf_ptr_->weights_mean_[c] * predicted_meas_sp_mat.col(c);
   }
 
   // predict measurement covariance
@@ -154,7 +162,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   Eigen::VectorXd dz = Eigen::VectorXd(kMeasDim);
   for (int c = 0; c < kSigmaPointsNum; c++) {
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
-    predicted_S += ukf_ptr_->weights_[c] * dz * dz.transpose();
+    predicted_S += ukf_ptr_->weights_cov_[c] * dz * dz.transpose();
   }
   predicted_S += R;
 
@@ -164,20 +172,24 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   for (int c = 0; c < kSigmaPointsNum; c++) {
     dx = ukf_ptr_->predicted_sp_mat_.col(c) - ukf_ptr_->predicted_x_;
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
-    Tc += ukf_ptr_->weights_[c] * dx * dz.transpose();
+    Tc += ukf_ptr_->weights_cov_[c] * dx * dz.transpose();
   }
 
   // update
   Eigen::Matrix<double, kMeasDim, 1> vec_vo;
   vec_vo.segment<3>(0) = Tvo.translation();
-  vec_vo.segment<3>(0) = rot_mat_to_vec(Tvo.linear());
+  vec_vo.segment<3>(3) = rot_mat_to_vec(Tvo.linear());
   dz = vec_vo - predicted_z;
 
   std::cout << "res: " << dz.transpose() << std::endl;
 
+  // int dof = 6;
+  // double chi2 = dz.transpose() * predicted_S.ldlt().solve(dz);
+  // std::cout << "chi2: " << chi2 << std::endl;
+  // if (chi2 >= chi_squared_test_table_[dof]) return;
+
   Eigen::MatrixXd K = Tc * predicted_S.inverse();
 
-  ukf_ptr_->state_ptr_->from_vec(ukf_ptr_->predicted_x_);
   *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + K * dz;
   ukf_ptr_->state_ptr_->cov = ukf_ptr_->predicted_P_ - K * predicted_S * K.transpose();
 

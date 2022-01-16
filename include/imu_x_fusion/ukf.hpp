@@ -14,12 +14,6 @@ ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;  // TODO
 constexpr int kStateDimAug = kStateDim + kNoiseDim;
 constexpr int kSigmaPointsNum = 2 * kStateDimAug + 1;
 
-const double kLambda = 3 - kStateDimAug;
-const double kScale = std::sqrt(kLambda + kStateDimAug);
-
-const double kW = 0.5 / (kLambda + kStateDimAug);
-const double kW0 = kLambda / double(kLambda + kStateDimAug);
-
 // class StateAug : public State {
 //  public:
 //   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -69,11 +63,26 @@ class UKF {
 
     Q_ = Eigen::Matrix<double, kNoiseDim, kNoiseDim>::Zero();
     Q_.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * acc_noise_ * acc_noise_;
-    Q_.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * acc_bias_noise_ * acc_bias_noise_;
-    Q_.block<3, 3>(6, 6) = Eigen::Matrix3d::Identity() * gyr_noise_ * gyr_noise_;
+    Q_.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * gyr_noise_ * gyr_noise_;
+    Q_.block<3, 3>(6, 6) = Eigen::Matrix3d::Identity() * acc_bias_noise_ * acc_bias_noise_;
     Q_.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * gyr_bias_noise_ * gyr_bias_noise_;
 
-    for (int i = 0; i < kSigmaPointsNum; i++) weights_[i] = i == 0 ? kW0 : kW;
+    // weights and scale
+    double alpha = 0.001;  // 1 × 10−4 ≤ α ≤ 1
+    double beta = 2.;
+    double kappa = 3 - kStateDimAug;
+    double alpha2 = alpha * alpha;
+
+    double lambda = alpha2 * (kStateDimAug + kappa) - kStateDimAug;  // (alpha2 - 1) * kStateDimAug;
+
+    double n_plus_lambda = kStateDimAug + lambda;
+
+    scale_ = std::sqrt(n_plus_lambda);
+
+    double weight = 0.5 / n_plus_lambda;
+    weights_mean_[0] = lambda / n_plus_lambda;
+    weights_cov_[0] = weights_mean_[0] + (1 - alpha2 + beta);  // (3 - alpha2)
+    for (int i = 1; i < kSigmaPointsNum; i++) weights_mean_[i] = weights_cov_[i] = weight;
   }
 
   void set_cov(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
@@ -126,6 +135,11 @@ class UKF {
     Eigen::MatrixXd P_aug = Eigen::MatrixXd::Zero(kStateDimAug, kStateDimAug);
 
     x_aug.head(kStateDim) = predicted_x_;
+    // x_aug.segment<3>(kStateDim + 0) = acc_noise_ * Eigen::Vector3d::Identity();
+    // x_aug.segment<3>(kStateDim + 3) = gyr_noise_ * Eigen::Vector3d::Identity();
+    // x_aug.segment<3>(kStateDim + 6) = acc_bias_noise_ * Eigen::Vector3d::Identity();
+    // x_aug.segment<3>(kStateDim + 9) = gyr_bias_noise_ * Eigen::Vector3d::Identity();
+
     P_aug.topLeftCorner(kStateDim, kStateDim) = predicted_P_;
     P_aug.bottomRightCorner(kNoiseDim, kNoiseDim) = Q_;
 
@@ -134,24 +148,29 @@ class UKF {
     sp_mat_aug.col(0) = x_aug;
     for (int c = 0; c < kStateDimAug; c++) {
       const int i = c + 1;
-      sp_mat_aug.col(i) = x_aug + kScale * L.col(c);
-      sp_mat_aug.col(i + kStateDimAug) = x_aug - kScale * L.col(c);
+      sp_mat_aug.col(i) = x_aug + scale_ * L.col(c);
+      sp_mat_aug.col(i + kStateDimAug) = x_aug - scale_ * L.col(c);
     }
 
     // predict sigma points
     predicted_sp_mat_ = Eigen::MatrixXd::Zero(kStateDim, kSigmaPointsNum);
     for (int i = 0; i < kSigmaPointsNum; i++) {
+      const Eigen::VectorXd &sp_aug = sp_mat_aug.col(i);
       State last_state, state;
-      last_state.from_vec(sp_mat_aug.col(i).head(kStateDim));
+      last_state.from_vec(sp_aug.head(kStateDim));
+      const auto &vec_na = sp_aug.segment<3>(kStateDim + 0);
+      const auto &vec_ng = sp_aug.segment<3>(kStateDim + 3);
+      const auto &vec_wa = sp_aug.segment<3>(kStateDim + 6);
+      const auto &vec_wg = sp_aug.segment<3>(kStateDim + 9);
       {
-        const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias;
-        const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias;
+        const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias + vec_wa;
+        const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias + vec_wg;
         const Eigen::Vector3d acc_nominal = last_state.r_GI * acc_unbias + Eigen::Vector3d(0, 0, -kG);
         state.p_GI = last_state.p_GI + last_state.v_GI * dt + 0.5 * acc_nominal * dt2;
         state.v_GI = last_state.v_GI + acc_nominal * dt;
         state.r_GI = State::rotation_update(last_state.r_GI, State::delta_rot_mat(gyr_unbias * dt));
-        state.acc_bias = last_state.acc_bias;
-        state.gyr_bias = last_state.gyr_bias;
+        state.acc_bias = last_state.acc_bias + vec_na * dt;
+        state.gyr_bias = last_state.gyr_bias + vec_ng * dt;
       }
       predicted_sp_mat_.col(i) = state.vec();
     }
@@ -159,7 +178,7 @@ class UKF {
     // predict sigma points mean
     predicted_x_ = Eigen::VectorXd::Zero(kStateDim);
     for (int c = 0; c < kSigmaPointsNum; c++) {
-      predicted_x_ += weights_[c] * predicted_sp_mat_.col(c);
+      predicted_x_ += weights_mean_[c] * predicted_sp_mat_.col(c);
     }
 
     // predict sigma points covariance
@@ -167,7 +186,7 @@ class UKF {
     Eigen::VectorXd dx = Eigen::VectorXd(kStateDim);
     for (int c = 0; c < kSigmaPointsNum; c++) {
       dx = predicted_sp_mat_.col(c) - predicted_x_;
-      predicted_P_ += weights_[c] * dx * dx.transpose();
+      predicted_P_ += weights_cov_[c] * dx * dx.transpose();
     }
 
     state_ptr_->timestamp = curr_imu->timestamp;
@@ -231,7 +250,10 @@ class UKF {
   Eigen::Matrix<double, kNoiseDim, kNoiseDim> Q_;
 
  public:
-  double weights_[kSigmaPointsNum];
+  double scale_;
+  double weights_mean_[kSigmaPointsNum];
+  double weights_cov_[kSigmaPointsNum];
+
   Eigen::VectorXd predicted_x_;
   Eigen::MatrixXd predicted_P_;
   Eigen::MatrixXd predicted_sp_mat_;
