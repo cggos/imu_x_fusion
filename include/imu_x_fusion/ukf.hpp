@@ -70,18 +70,19 @@ class UKF {
     // weights and scale
     double alpha = 0.001;  // 1 × 10−4 ≤ α ≤ 1
     double beta = 2.;
-    double kappa = 3 - kStateDimAug;
+    double kappa = 3 - kStateDimAug;  // 0.
     double alpha2 = alpha * alpha;
 
-    double lambda = alpha2 * (kStateDimAug + kappa) - kStateDimAug;  // (alpha2 - 1) * kStateDimAug;
+    double lambda = alpha2 * (kStateDimAug + kappa) - kStateDimAug;
 
     double n_plus_lambda = kStateDimAug + lambda;
 
     scale_ = std::sqrt(n_plus_lambda);
 
-    double weight = 0.5 / n_plus_lambda;
     weights_mean_[0] = lambda / n_plus_lambda;
-    weights_cov_[0] = weights_mean_[0] + (1 - alpha2 + beta);  // (3 - alpha2)
+    weights_cov_[0] = weights_mean_[0] + (1 - alpha2 + beta);
+    
+    double weight = 0.5 / n_plus_lambda;
     for (int i = 1; i < kSigmaPointsNum; i++) weights_mean_[i] = weights_cov_[i] = weight;
   }
 
