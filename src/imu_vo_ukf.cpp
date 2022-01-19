@@ -137,8 +137,8 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   // predict measurement sigma points
   Eigen::Isometry3d Twb;
-  Eigen::MatrixXd predicted_meas_sp_mat = Eigen::MatrixXd::Zero(kMeasDim, kSigmaPointsNum);
-  for (int i = 0; i < kSigmaPointsNum; i++) {
+  Eigen::MatrixXd predicted_meas_sp_mat = Eigen::MatrixXd::Zero(kMeasDim, ukf_ptr_->sigma_points_num_);
+  for (int i = 0; i < ukf_ptr_->sigma_points_num_; i++) {
     const auto &sp = ukf_ptr_->predicted_sp_mat_.col(i);
 
     Twb.translation() = sp.segment<3>(0);
@@ -153,14 +153,14 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   // predict measurement mean
   Eigen::VectorXd predicted_z = Eigen::VectorXd::Zero(kMeasDim);
-  for (int c = 0; c < kSigmaPointsNum; c++) {
+  for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
     predicted_z += ukf_ptr_->weights_mean_[c] * predicted_meas_sp_mat.col(c);
   }
 
   // predict measurement covariance
   Eigen::MatrixXd predicted_S = Eigen::MatrixXd::Zero(kMeasDim, kMeasDim);
   Eigen::VectorXd dz = Eigen::VectorXd(kMeasDim);
-  for (int c = 0; c < kSigmaPointsNum; c++) {
+  for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
     predicted_S += ukf_ptr_->weights_cov_[c] * dz * dz.transpose();
   }
@@ -169,7 +169,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   // compute Tc
   Eigen::VectorXd dx;
   Eigen::MatrixXd Tc = Eigen::MatrixXd::Zero(kStateDim, kMeasDim);
-  for (int c = 0; c < kSigmaPointsNum; c++) {
+  for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
     dx = ukf_ptr_->predicted_sp_mat_.col(c) - ukf_ptr_->predicted_x_;
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
     Tc += ukf_ptr_->weights_cov_[c] * dx * dz.transpose();
