@@ -190,7 +190,13 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   Eigen::MatrixXd K = Tc * predicted_S.inverse();
 
-  *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + K * dz;
+  dx = K * dz;
+
+  for (int i = 0; i < dx.size(); i++) {
+    if (std::isnan(dx[i]) || std::isinf(dx[i])) return;
+  }
+
+  *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + dx;
   ukf_ptr_->state_ptr_->cov = ukf_ptr_->predicted_P_ - K * predicted_S * K.transpose();
 
   std::cout << "acc bias: " << ukf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
