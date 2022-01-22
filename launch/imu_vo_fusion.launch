@@ -1,6 +1,6 @@
 <launch>
     <arg name="rviz" default="true"/>
-    <arg name="filter" default="ukf"/>
+    <arg name="filter" default="ekf"/>
 
     <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-euroc.yaml" />
 
