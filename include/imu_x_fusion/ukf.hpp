@@ -47,7 +47,7 @@ class UKF {
     int N = is_Q_aug_ ? kStateDimAug : kStateDim;
     double alpha = 0.001;  // 1 × 10−4 ≤ α ≤ 1
     double beta = 2.;
-    double kappa = 0;//3 - N;  // 0.
+    double kappa = 0;  // 0. or 3 - N;
     double alpha2 = alpha * alpha;
 
     double lambda = alpha2 * (N + kappa) - N;
@@ -111,19 +111,6 @@ class UKF {
     Eigen::MatrixXd sp_mat0 = Eigen::MatrixXd::Zero(N0, sigma_points_num_);
 
     x0.head(kStateDim) = predicted_x_;
-
-    // {
-    //   Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_P_, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    //   Eigen::MatrixXd singularValues;
-    //   singularValues.resize(svd.singularValues().rows(), 1);
-    //   singularValues = svd.singularValues();
-    //   double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
-    //   double max_cond_number = 1e5;
-    //   std::cout << "cond: " << std::abs(cond) << std::endl;
-    //   if (std::abs(cond) > max_cond_number) {
-    //     predicted_P_ = predicted_P_.diagonal().asDiagonal();
-    //   }
-    // }
 
     P0.topLeftCorner(kStateDim, kStateDim) = predicted_P_;
     if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = Q_;

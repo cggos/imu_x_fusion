@@ -164,18 +164,6 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
     predicted_S += ukf_ptr_->weights_cov_[c] * dz * dz.transpose();
   }
-  // {
-  //   Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_S, Eigen::ComputeThinU | Eigen::ComputeThinV);
-  //   Eigen::MatrixXd singularValues;
-  //   singularValues.resize(svd.singularValues().rows(), 1);
-  //   singularValues = svd.singularValues();
-  //   double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
-  //   double max_cond_number = 1e5;
-  //   std::cout << "cond: " << std::abs(cond) << std::endl;
-  //   if (std::abs(cond) > max_cond_number) {
-  //     predicted_S = predicted_S.diagonal().asDiagonal();  // 提取矩阵的对角线部分并将其视为对角线矩阵
-  //   }
-  // }
   predicted_S += R;
 
   // compute Tc
@@ -193,32 +181,24 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   vec_vo.segment<3>(3) = rot_mat_to_vec(Tvo.linear());
   dz = vec_vo - predicted_z;
 
-  std::cout << "dz: " << dz.transpose() << std::endl;
-
-  // int dof = 6;
-  // double chi2 = dz.transpose() * predicted_S.ldlt().solve(dz);
-  // std::cout << "chi2: " << chi2 << std::endl;
-  // if (chi2 >= chi_squared_test_table_[dof]) return;
+  // chi-square gating test
+  const float scale = 200;
+  const int dof = kMeasDim;
+  double chi2 = dz.transpose() * predicted_S.ldlt().solve(dz);
+  std::cout << "chi2: " << chi2 << std::endl;
+  if (chi2 >= scale * chi_squared_test_table_[dof]) {
+    // TODO
+    // return;
+  }
 
   Eigen::MatrixXd K = Tc * predicted_S.inverse();
 
-  dx = K * dz;
-
-  std::cout << "dx: " << dx.transpose() << std::endl;
-
-  // for (int i = 0; i < dx.size(); i++) {
-  //   if (std::isnan(dx[i]) || std::isinf(dx[i])) return;
-  // }
-
-  std::cout << "state vec 0: " << ukf_ptr_->state_ptr_->vec().transpose() << std::endl;
-
-  // *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + dx;
-  // ukf_ptr_->state_ptr_->cov = ukf_ptr_->state_ptr_->cov - K * predicted_S * K.transpose();
-
-  ukf_ptr_->predicted_x_ = ukf_ptr_->predicted_x_ + dx;
+  ukf_ptr_->predicted_x_ = ukf_ptr_->predicted_x_ + K * dz;
   ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_ - K * predicted_S * K.transpose();
   ukf_ptr_->predicted_P_ = 0.5 * (ukf_ptr_->predicted_P_ + ukf_ptr_->predicted_P_.transpose());
 
+  // condition number
+  // 解决：因观测误差较大，使P负定，致使后面P的Choleysky分解失败出现NaN，导致滤波器发散
   {
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(ukf_ptr_->predicted_P_, Eigen::ComputeThinU | Eigen::ComputeThinV);
     Eigen::MatrixXd singularValues;
@@ -226,16 +206,14 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     singularValues = svd.singularValues();
     double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
     double max_cond_number = 1e5;
-    std::cout << "cond: " << std::abs(cond) << std::endl;
+    std::cout << "cond num of P: " << std::abs(cond) << std::endl;
     if (std::abs(cond) > max_cond_number) {
-      ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_.diagonal().asDiagonal();  // 提取矩阵的对角线部分并将其视为对角线矩阵
+      ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_.diagonal().asDiagonal();
     }
-  }  
+  }
 
   ukf_ptr_->state_ptr_->from_vec(ukf_ptr_->predicted_x_);
   ukf_ptr_->state_ptr_->cov = ukf_ptr_->predicted_P_;
-
-  std::cout << "state vec 1: " << ukf_ptr_->state_ptr_->vec().transpose() << std::endl;
 
   std::cout << "acc bias: " << ukf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << ukf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
