@@ -198,7 +198,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   ukf_ptr_->predicted_P_ = 0.5 * (ukf_ptr_->predicted_P_ + ukf_ptr_->predicted_P_.transpose());
 
   // condition number
-  // 解决：因观测误差较大，使P负定，致使后面P的Choleysky分解失败出现NaN，导致滤波器发散
+  // 解决：因观测误差较大，使P负定，致使后面P的Cholesky分解失败出现NaN，导致滤波器发散
   {
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(ukf_ptr_->predicted_P_, Eigen::ComputeThinU | Eigen::ComputeThinV);
     Eigen::MatrixXd singularValues;

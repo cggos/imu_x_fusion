@@ -123,17 +123,16 @@ class UKF {
     if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = Qi;  // TODO: Q with dt or not ?
 
     Eigen::MatrixXd L;
-#if 1
-    L = P0.llt().matrixL();
-#else
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(P0, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    auto &U = svd.matrixU();
-    auto &V = svd.matrixV();
-    auto &S = U.inverse() * P0 * V.transpose().inverse();  // S = U^-1 * A * VT * -1
-    Eigen::MatrixXd Smat = S.matrix();
-    Eigen::MatrixXd S_sqr = Smat.llt().matrixL();
-    L = U.matrix() * S_sqr;  // U * sqrt(S)
-#endif
+    if (!is_SVD_P_)
+      L = P0.llt().matrixL();
+    else {
+      // for not-PSD cov matrix
+      Eigen::JacobiSVD<Eigen::MatrixXd> svd(P0, Eigen::ComputeFullU | Eigen::ComputeFullV);
+      const auto &S = svd.matrixU().inverse() * P0 * svd.matrixV().transpose().inverse();  // S = U^-1 * A * VT * -1
+      const Eigen::MatrixXd &Smat = S.matrix();
+      const Eigen::MatrixXd &S_sqr = Smat.llt().matrixL();
+      L = svd.matrixU().matrix() * S_sqr;  // U * sqrt(S)
+    }
 
     sp_mat0.col(0) = x0;
     for (int c = 0; c < N0; c++) {
@@ -264,7 +263,8 @@ class UKF {
   double acc_bias_noise_;
   double gyr_bias_noise_;
 
-  bool is_Q_aug_ = true;  // P  <--  [P Q]  or  P + Q
+  bool is_Q_aug_ = true;   // P  <--  [P Q]  or  P + Q
+  bool is_SVD_P_ = false;  // LLT or SVD for P0 (for not-PSD cov matrix)
   bool is_JUKF_ = false;   // same with EKF for cov propagation or not
 
  public:
