@@ -107,7 +107,7 @@ Eigen::Matrix<double, kMeasDim, kStateDim> EKFFusionNode::measurementH(const Eig
 
   Eigen::Quaterniond q_vw(Rvw);
   Eigen::Quaterniond q_cb(Tcb.linear());
-  Eigen::Quaterniond q(ekf_ptr_->state_ptr_->r_GI);
+  Eigen::Quaterniond q(ekf_ptr_->state_ptr_->Rwb_);
 
   switch (ekf_ptr_->kJacobMeasurement_) {
     case JACOBIAN_MEASUREMENT::HX_X: {
@@ -164,7 +164,7 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
       return;
 
     Eigen::Isometry3d Tb0bm;
-    Tb0bm.linear() = ekf_ptr_->state_ptr_->r_GI;
+    Tb0bm.linear() = ekf_ptr_->state_ptr_->Rwb_;
     Tb0bm.translation().setZero();
 
     const Eigen::Isometry3d &Tc0cm = Tvo;

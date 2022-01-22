@@ -53,7 +53,7 @@ class IMU {
 
     state.timestamp = last_imu_ptr->timestamp;
 
-    return init_rot_from_imudata(imu_buf_, state.r_GI);
+    return init_rot_from_imudata(imu_buf_, state.Rwb_);
   }
 
   /**
@@ -103,12 +103,12 @@ class IMU {
     const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias + vec_wa;
     const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias + vec_wg;
 
-    const Eigen::Vector3d acc_nominal = last_state.r_GI * acc_unbias + Eigen::Vector3d(0, 0, -kG);
+    const Eigen::Vector3d acc_nominal = last_state.Rwb_ * acc_unbias + Eigen::Vector3d(0, 0, -kG);
     const auto &dR = State::delta_rot_mat(gyr_unbias * dt);
 
-    state.p_GI = last_state.p_GI + last_state.v_GI * dt + 0.5 * acc_nominal * dt2;
-    state.v_GI = last_state.v_GI + acc_nominal * dt;
-    state.r_GI = State::rotation_update(last_state.r_GI, dR);
+    state.p_wb_ = last_state.p_wb_ + last_state.v_wb_ * dt + 0.5 * acc_nominal * dt2;
+    state.v_wb_ = last_state.v_wb_ + acc_nominal * dt;
+    state.Rwb_ = State::rotation_update(last_state.Rwb_, dR);
     state.acc_bias = last_state.acc_bias + vec_na * dt;
     state.gyr_bias = last_state.gyr_bias + vec_ng * dt;
   }
@@ -138,13 +138,13 @@ class IMU {
     // Fx
     MatrixSD Fx = MatrixSD::Identity();
     Fx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * dt;
-    Fx.block<3, 3>(3, 6) = -state.r_GI * cg::skew_matrix(acc_unbias) * dt;
-    Fx.block<3, 3>(3, 9) = -state.r_GI * dt;
+    Fx.block<3, 3>(3, 6) = -state.Rwb_ * cg::skew_matrix(acc_unbias) * dt;
+    Fx.block<3, 3>(3, 9) = -state.Rwb_ * dt;
     if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
       Fx.block<3, 3>(6, 6) = dR.transpose();
       Fx.block<3, 3>(6, 12) = -Eigen::Matrix3d::Identity() * dt;
     } else {
-      Fx.block<3, 3>(6, 12) = -state.r_GI * dt;
+      Fx.block<3, 3>(6, 12) = -state.Rwb_ * dt;
     }
 
     // P: error-state covariance

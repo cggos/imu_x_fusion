@@ -2,9 +2,8 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include <memory>
-
 #include <GeographicLib/LocalCartesian.hpp>
+#include <memory>
 
 namespace cg {
 

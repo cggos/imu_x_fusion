@@ -115,11 +115,8 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   Eigen::Vector3d p_G_Gps;
   cg::lla2enu(init_lla_, gps_data_ptr->lla, &p_G_Gps);
 
-  const Eigen::Vector3d &p_GI = ekf_ptr_->state_ptr_->p_GI;
-  const Eigen::Matrix3d &r_GI = ekf_ptr_->state_ptr_->r_GI;
-
   // residual
-  Eigen::Vector3d residual = p_G_Gps - (p_GI + r_GI * I_p_Gps_);
+  Eigen::Vector3d residual = p_G_Gps - (ekf_ptr_->state_ptr_->p_wb_ + ekf_ptr_->state_ptr_->Rwb_ * I_p_Gps_);
 
   std::cout << "---------------------" << std::endl;
   std::cout << "res: " << residual.transpose() << std::endl;
@@ -128,7 +125,7 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   Eigen::Matrix<double, 3, kStateDim> H;
   H.setZero();
   H.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
-  H.block<3, 3>(0, 6) = -r_GI * cg::skew_matrix(I_p_Gps_);
+  H.block<3, 3>(0, 6) = -ekf_ptr_->state_ptr_->Rwb_ * cg::skew_matrix(I_p_Gps_);
 
   // measurement covariance
   const Eigen::Matrix3d &R = gps_data_ptr->cov;
@@ -147,13 +144,13 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
     viewer_.publish_gnss(*ekf_ptr_->state_ptr_);
 
     // save state p q lla
-    std::shared_ptr<State> kf_state(ekf_ptr_->state_ptr_);
     Eigen::Vector3d lla;
-    cg::enu2lla(init_lla_, kf_state->p_GI, &lla);  // convert ENU state to lla
-    const Eigen::Quaterniond q_GI(kf_state->r_GI);
-    file_state_ << std::fixed << std::setprecision(15) << kf_state->timestamp << ", " << kf_state->p_GI[0] << ", "
-                << kf_state->p_GI[1] << ", " << kf_state->p_GI[2] << ", " << q_GI.x() << ", " << q_GI.y() << ", "
-                << q_GI.z() << ", " << q_GI.w() << ", " << lla[0] << ", " << lla[1] << ", " << lla[2] << std::endl;
+    cg::enu2lla(init_lla_, ekf_ptr_->state_ptr_->p_wb_, &lla);  // convert ENU state to lla
+    const Eigen::Quaterniond q_GI(ekf_ptr_->state_ptr_->Rwb_);
+    file_state_ << std::fixed << std::setprecision(15) << ekf_ptr_->state_ptr_->timestamp << ", "
+                << ekf_ptr_->state_ptr_->p_wb_[0] << ", " << ekf_ptr_->state_ptr_->p_wb_[1] << ", "
+                << ekf_ptr_->state_ptr_->p_wb_[2] << ", " << q_GI.x() << ", " << q_GI.y() << ", " << q_GI.z() << ", "
+                << q_GI.w() << ", " << lla[0] << ", " << lla[1] << ", " << lla[2] << std::endl;
 
     file_gps_ << std::fixed << std::setprecision(15) << gps_data_ptr->timestamp << ", " << gps_data_ptr->lla[0] << ", "
               << gps_data_ptr->lla[1] << ", " << gps_data_ptr->lla[2] << std::endl;

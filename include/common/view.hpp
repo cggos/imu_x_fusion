@@ -26,10 +26,10 @@ class Viewer {
     odom_msg.child_frame_id = "odom";
 
     Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
-    T_wb.linear() = state.r_GI;
-    T_wb.translation() = state.p_GI;
+    T_wb.linear() = state.Rwb_;
+    T_wb.translation() = state.p_wb_;
     tf::poseEigenToMsg(T_wb, odom_msg.pose.pose);
-    tf::vectorEigenToMsg(state.v_GI, odom_msg.twist.twist.linear);
+    tf::vectorEigenToMsg(state.v_wb_, odom_msg.twist.twist.linear);
     const Eigen::Matrix3d &P_pp = state.cov.block<3, 3>(0, 0);
     const Eigen::Matrix3d &P_po = state.cov.block<3, 3>(0, 6);
     const Eigen::Matrix3d &P_op = state.cov.block<3, 3>(6, 0);
@@ -65,10 +65,10 @@ class Viewer {
     odom_msg.header.frame_id = fixed_id;
     odom_msg.header.stamp = ros::Time::now();
     Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
-    T_wb.linear() = state.r_GI;
-    T_wb.translation() = state.p_GI;
+    T_wb.linear() = state.Rwb_;
+    T_wb.translation() = state.p_wb_;
     tf::poseEigenToMsg(T_wb, odom_msg.pose.pose);
-    tf::vectorEigenToMsg(state.v_GI, odom_msg.twist.twist.linear);
+    tf::vectorEigenToMsg(state.v_wb_, odom_msg.twist.twist.linear);
     Eigen::Matrix3d P_pp = state.cov.block<3, 3>(0, 0);
     Eigen::Matrix3d P_po = state.cov.block<3, 3>(0, 6);
     Eigen::Matrix3d P_op = state.cov.block<3, 3>(6, 0);

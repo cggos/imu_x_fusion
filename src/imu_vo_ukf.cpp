@@ -116,7 +116,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     ukf_ptr_->predicted_P_ = ukf_ptr_->state_ptr_->cov;
 
     Eigen::Isometry3d Tb0bm;
-    Tb0bm.linear() = ukf_ptr_->state_ptr_->r_GI;
+    Tb0bm.linear() = ukf_ptr_->state_ptr_->Rwb_;
     Tb0bm.translation().setZero();
 
     const Eigen::Isometry3d &Tc0cm = Tvo;
