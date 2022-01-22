@@ -1,12 +1,16 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(imu_x_fusion)
 
+# set(CMAKE_BUILD_TYPE Debug)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release")
+endif()
+
 # Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++14) # for std::make_unique
+add_compile_options(-std=c++14 -g) # for std::make_unique
 
 add_definitions(-w)
-
-# set(CMAKE_BUILD_TYPE Debug)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -145,12 +149,12 @@ include_directories(
 ## either from message generation or dynamic reconfigure
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-add_executable(imu_gnss_fusion_node src/imu_gnss_fusion_node.cpp src/utils.cpp)
-set_target_properties(imu_gnss_fusion_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
-target_link_libraries(imu_gnss_fusion_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${GeographicLib_LIBRARIES})
+add_executable(imu_gnss_ekf_node src/imu_gnss_ekf.cpp src/utils.cpp)
+set_target_properties(imu_gnss_ekf_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
+target_link_libraries(imu_gnss_ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${GeographicLib_LIBRARIES})
 
-add_executable(imu_vo_fusion_node src/imu_vo_fusion_node.cpp src/utils.cpp)
-target_link_libraries(imu_vo_fusion_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_executable(imu_vo_ekf_node src/imu_vo_ekf.cpp src/utils.cpp)
+target_link_libraries(imu_vo_ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(imu_vo_ukf_node src/imu_vo_ukf.cpp src/utils.cpp)
 target_link_libraries(imu_vo_ukf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})

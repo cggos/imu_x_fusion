@@ -4,17 +4,14 @@
 #include <Eigen/Geometry>
 #include <memory>
 
-#include "imu_x_fusion/utils.h"
+#include "common/utils.h"
 
 namespace cg {
 
-constexpr int kStateDim = 15;
-constexpr int kNoiseDim = 12;
 constexpr double kG = 9.81007;
 
-const double kDegreeToRadian = M_PI / 180.;
-
-using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
+constexpr int kStateDim = 15;
+constexpr int kNoiseDim = 12;
 
 /**
  * @brief local or global angular error or rotation perturbation, ref: JoanSola ESKF 7.
@@ -26,24 +23,7 @@ using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
  */
 enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
 
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
-
-struct ImuData {
-  double timestamp;
-  Eigen::Vector3d acc;
-  Eigen::Vector3d gyr;
-};
-using ImuDataPtr = std::shared_ptr<ImuData>;
-using ImuDataConstPtr = std::shared_ptr<const ImuData>;
-
-struct GpsData {
-  double timestamp;
-
-  Eigen::Vector3d lla;  // Latitude in degree, longitude in degree, and altitude in meter
-  Eigen::Matrix3d cov;  // Covariance in m^2
-};
-using GpsDataPtr = std::shared_ptr<GpsData>;
-using GpsDataConstPtr = std::shared_ptr<const GpsData>;
+using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
 
 class State {
  public:
@@ -98,6 +78,25 @@ class State {
     r_GI = rot_vec_to_mat(vec.segment<3>(6));
     acc_bias = vec.segment<3>(9);
     gyr_bias = vec.segment<3>(12);
+  }
+
+  /**
+   * @brief Set the cov object
+   *
+   * @param sigma_p pos std, m
+   * @param sigma_v vel std, m/s
+   * @param sigma_rp roll pitch std
+   * @param sigma_yaw yaw std
+   * @param sigma_ba Acc bias
+   * @param sigma_bg Gyr bias
+   */
+  void set_cov(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
+    cov.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * sigma_p * sigma_p;
+    cov.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * sigma_v * sigma_v;
+    cov.block<2, 2>(6, 6) = Eigen::Matrix2d::Identity() * sigma_rp * sigma_rp;
+    cov(8, 8) = sigma_yaw * sigma_yaw;
+    cov.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * sigma_ba * sigma_ba;
+    cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * sigma_bg * sigma_bg;
   }
 
   State &operator=(const State &rhs) {

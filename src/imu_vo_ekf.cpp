@@ -1,22 +1,23 @@
-#include <eigen_conversions/eigen_msg.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 
 #include <deque>
 #include <iostream>
 
-#include "imu_x_fusion/kf.hpp"
+#include "common/utils.h"
+#include "common/view.hpp"
+#include "estimator/ekf.hpp"
+#include "sensor/imu.hpp"
 
 namespace cg {
 
 constexpr int kMeasDim = 6;
 
-class FusionNode {
+ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;
+
+class EKFFusionNode {
  public:
-  FusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
+  EKFFusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) : viewer_(nh) {
     std::string topic_vo = "/odom_vo";
     std::string topic_imu = "/imu0";
 
@@ -39,20 +40,34 @@ class FusionNode {
     sigma_rp *= kDegreeToRadian;
     sigma_yaw *= kDegreeToRadian;
 
-    kf_ptr_ = std::make_unique<KF>(acc_n, gyr_n, acc_w, gyr_w);
-    kf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    ekf_ptr_ = std::make_unique<EKF>(acc_n, gyr_n, acc_w, gyr_w);
+    ekf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
-    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&KF::imu_callback, kf_ptr_.get(), _1));
-    vo_sub_ = nh.subscribe(topic_vo, 10, &FusionNode::vo_callback, this);
-
-    path_pub_ = nh.advertise<nav_msgs::Path>("path_est", 10);
-    path_pub_vo_ = nh.advertise<nav_msgs::Path>("path_vo", 10);
-    odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom_est", 10);
+    // imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&EKF::imu_callback, ekf_ptr_.get(), _1));
+    imu_sub_ = nh.subscribe(topic_imu, 10, &EKFFusionNode::imu_callback, this);
+    vo_sub_ = nh.subscribe(topic_vo, 10, &EKFFusionNode::vo_callback, this);
 
     Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
   }
 
-  ~FusionNode() {}
+  ~EKFFusionNode() {}
+
+  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
+    ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
+    imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
+    imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
+    imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
+    imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
+    imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
+    imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
+    imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
+
+    if (!ekf_ptr_->imu_model_.push_data(imu_data_ptr, initialized_)) return;
+
+    ekf_ptr_->predict(last_imu_ptr_, imu_data_ptr);
+
+    last_imu_ptr_ = imu_data_ptr;
+  }
 
   void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
@@ -60,24 +75,20 @@ class FusionNode {
 
   void check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &T);
 
-  void publish();
-
  private:
+  bool initialized_ = false;
+
+  ImuDataConstPtr last_imu_ptr_;
+
   ros::Subscriber imu_sub_;
   ros::Subscriber vo_sub_;
-
-  ros::Publisher odom_pub_;
-  ros::Publisher path_pub_;
-  ros::Publisher path_pub_vo_;
-
-  nav_msgs::Path nav_path_;
-  nav_msgs::Path nav_path_vo_;
 
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
   Eigen::Isometry3d TvoB;  // for publish
 
-  KFPtr kf_ptr_;
+  EKFPtr ekf_ptr_;
+  Viewer viewer_;
 };
 
 /**
@@ -87,8 +98,8 @@ class FusionNode {
  * @param T
  * @return
  */
-Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen::Quaterniond &vo_q,
-                                                                    const Eigen::Isometry3d &T) {
+Eigen::Matrix<double, kMeasDim, kStateDim> EKFFusionNode::measurementH(const Eigen::Quaterniond &vo_q,
+                                                                       const Eigen::Isometry3d &T) {
   Eigen::Matrix<double, kMeasDim, kStateDim> H;
   H.setZero();
 
@@ -96,9 +107,9 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
 
   Eigen::Quaterniond q_vw(Rvw);
   Eigen::Quaterniond q_cb(Tcb.linear());
-  Eigen::Quaterniond q(kf_ptr_->state_ptr_->r_GI);
+  Eigen::Quaterniond q(ekf_ptr_->state_ptr_->r_GI);
 
-  switch (kf_ptr_->kJacobMeasurement_) {
+  switch (ekf_ptr_->kJacobMeasurement_) {
     case JACOBIAN_MEASUREMENT::HX_X: {
       H.block<3, 3>(0, 0) = Rvw;
       if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
@@ -130,7 +141,7 @@ Eigen::Matrix<double, kMeasDim, kStateDim> FusionNode::measurementH(const Eigen:
   return H;
 }
 
-void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg) {
+void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg) {
   Eigen::Vector3d vo_p;
   Eigen::Quaterniond vo_q;
   vo_p.x() = vo_msg->pose.pose.position.x;
@@ -148,24 +159,12 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
   const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
-  if (!kf_ptr_->initialized_) {
-    if (kf_ptr_->imu_buf_.size() < kf_ptr_->kImuBufSize) {
-      printf("[cggos %s] ERROR: Not Enough IMU data for Initialization!!!\n", __FUNCTION__);
+  if (!initialized_) {
+    if (!(initialized_ = ekf_ptr_->imu_model_.init(*ekf_ptr_->state_ptr_, vo_msg->header.stamp.toSec(), last_imu_ptr_)))
       return;
-    }
-
-    kf_ptr_->last_imu_ptr_ = kf_ptr_->imu_buf_.back();
-    if (std::abs(vo_msg->header.stamp.toSec() - kf_ptr_->last_imu_ptr_->timestamp) > 0.05) {
-      printf("[cggos %s] ERROR: timestamps are not synchronized!!!\n", __FUNCTION__);
-      return;
-    }
-
-    kf_ptr_->state_ptr_->timestamp = kf_ptr_->last_imu_ptr_->timestamp;
-
-    if (!kf_ptr_->init_rot_from_imudata(kf_ptr_->state_ptr_->r_GI, kf_ptr_->imu_buf_)) return;
 
     Eigen::Isometry3d Tb0bm;
-    Tb0bm.linear() = kf_ptr_->state_ptr_->r_GI;
+    Tb0bm.linear() = ekf_ptr_->state_ptr_->r_GI;
     Tb0bm.translation().setZero();
 
     const Eigen::Isometry3d &Tc0cm = Tvo;
@@ -177,18 +176,15 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     return;
   }
 
-  // for publish, Tvo in frame W --> Tb0bn
-  TvoB = Tvw.inverse() * Tvo * Tcb;
-
   // IEKF iteration update, same with EKF when n_ite = 1
   int n_ite = 10;
   Eigen::Matrix<double, kMeasDim, kStateDim> H_i;
   Eigen::Matrix<double, kStateDim, kMeasDim> K_i;
   for (int i = 0; i < n_ite; i++) {
-    if (i == 0) *kf_ptr_->state_ptr_i_ = *kf_ptr_->state_ptr_;
+    if (i == 0) *ekf_ptr_->state_ptr_i_ = *ekf_ptr_->state_ptr_;
 
     // x_i
-    const Eigen::Isometry3d &Twb_i = kf_ptr_->state_ptr_i_->pose();
+    const Eigen::Isometry3d &Twb_i = ekf_ptr_->state_ptr_i_->pose();
 
     // measurement estimation h(x_i), Twb in frame V --> Tc0cn
     const Eigen::Isometry3d &Twb_in_V = Tvw * Twb_i * Tcb.inverse();
@@ -205,26 +201,29 @@ void FusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConst
     residual.bottomRows(3) = State::rotation_residual(Tvo.linear(), Twb_in_V.linear());
 
     // residual -= H (x_prior - x_i)
-    Eigen::Matrix<double, kStateDim, 1> delta_x = *kf_ptr_->state_ptr_ - *kf_ptr_->state_ptr_i_;
+    Eigen::Matrix<double, kStateDim, 1> delta_x = *ekf_ptr_->state_ptr_ - *ekf_ptr_->state_ptr_i_;
     residual -= H_i * delta_x;
 
     std::cout << "res: " << residual.transpose() << std::endl;
 
-    kf_ptr_->update_K(H_i, R, K_i);
-    *kf_ptr_->state_ptr_i_ = *kf_ptr_->state_ptr_ + K_i * residual;
+    ekf_ptr_->update_K(H_i, R, K_i);
+    *ekf_ptr_->state_ptr_i_ = *ekf_ptr_->state_ptr_ + K_i * residual;
   }
 
   // update state and cov
-  *kf_ptr_->state_ptr_ = *kf_ptr_->state_ptr_i_;
-  kf_ptr_->update_P(H_i, R, K_i);
+  *ekf_ptr_->state_ptr_ = *ekf_ptr_->state_ptr_i_;
+  ekf_ptr_->update_P(H_i, R, K_i);
 
-  std::cout << "acc bias: " << kf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
-  std::cout << "gyr bias: " << kf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
+  std::cout << "acc bias: " << ekf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
+  std::cout << "gyr bias: " << ekf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
 
-  publish();
+  // view
+  // for publish, Tvo in frame W --> Tb0bn
+  TvoB = Tvw.inverse() * Tvo * Tcb;
+  viewer_.publish_vo(*ekf_ptr_->state_ptr_, TvoB);
 }
 
-void FusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &Twb) {
+void EKFFusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Isometry3d &Twb) {
   Eigen::Vector3d delta(0.0012, -0.00034, -0.00056);
 
   // perturbation on t
@@ -253,47 +252,6 @@ void FusionNode::check_jacobian(const Eigen::Quaterniond &vo_q, const Eigen::Iso
   std::cout << "---------------------" << std::endl;
 }
 
-void FusionNode::publish() {
-  // publish the odometry
-  std::string fixed_id = "global";
-  nav_msgs::Odometry odom_msg;
-  odom_msg.header.stamp = ros::Time::now();
-  odom_msg.header.frame_id = fixed_id;
-  odom_msg.child_frame_id = "odom";
-
-  Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
-  T_wb.linear() = kf_ptr_->state_ptr_->r_GI;
-  T_wb.translation() = kf_ptr_->state_ptr_->p_GI;
-  tf::poseEigenToMsg(T_wb, odom_msg.pose.pose);
-  tf::vectorEigenToMsg(kf_ptr_->state_ptr_->v_GI, odom_msg.twist.twist.linear);
-  const Eigen::Matrix3d &P_pp = kf_ptr_->state_ptr_->cov.block<3, 3>(0, 0);
-  const Eigen::Matrix3d &P_po = kf_ptr_->state_ptr_->cov.block<3, 3>(0, 6);
-  const Eigen::Matrix3d &P_op = kf_ptr_->state_ptr_->cov.block<3, 3>(6, 0);
-  const Eigen::Matrix3d &P_oo = kf_ptr_->state_ptr_->cov.block<3, 3>(6, 6);
-  Eigen::Matrix<double, 6, 6, Eigen::RowMajor> P_imu_pose = Eigen::Matrix<double, 6, 6>::Zero();
-  P_imu_pose << P_pp, P_po, P_op, P_oo;
-  for (int i = 0; i < 36; i++) odom_msg.pose.covariance[i] = P_imu_pose.data()[i];
-  odom_pub_.publish(odom_msg);
-
-  // publish the path
-  geometry_msgs::PoseStamped pose_stamped;
-  pose_stamped.header = odom_msg.header;
-  pose_stamped.pose = odom_msg.pose.pose;
-  nav_path_.header = pose_stamped.header;
-  nav_path_.poses.push_back(pose_stamped);
-  path_pub_.publish(nav_path_);
-
-  // publish vo path
-  geometry_msgs::Pose pose_vo;
-  tf::poseEigenToMsg(TvoB, pose_vo);
-  geometry_msgs::PoseStamped pose_stamped_vo;
-  pose_stamped_vo.header = pose_stamped.header;
-  pose_stamped_vo.pose = pose_vo;
-  nav_path_vo_.header = pose_stamped_vo.header;
-  nav_path_vo_.poses.push_back(pose_stamped_vo);
-  path_pub_vo_.publish(nav_path_vo_);
-}
-
 }  // namespace cg
 
 int main(int argc, char **argv) {
@@ -301,7 +259,7 @@ int main(int argc, char **argv) {
 
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
-  cg::FusionNode fusion_node(nh, pnh);
+  cg::EKFFusionNode fusion_node(nh, pnh);
 
   ros::spin();
 

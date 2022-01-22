@@ -15,7 +15,7 @@
     <param name="topic_vo" value="/pose_orbslam" />
     <param name="topic_imu" value="/mynteye/imu/data_raw" />    
     
-    <node name="imu_vo_fusion_node" pkg="imu_x_fusion" type="imu_vo_fusion_node" output="screen">
+    <node name="imu_vo_ekf_node" pkg="imu_x_fusion" type="imu_vo_ekf_node" output="screen">
       <rosparam command="load" file="$(arg calibration_file)"/>
     </node>
 

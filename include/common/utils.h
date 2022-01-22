@@ -8,6 +8,8 @@
 
 namespace cg {
 
+const double kDegreeToRadian = M_PI / 180.;
+
 Eigen::Isometry3d getTransformEigen(const ros::NodeHandle &nh, const std::string &field);
 
 cv::Mat getTransformCV(const ros::NodeHandle &nh, const std::string &field);
