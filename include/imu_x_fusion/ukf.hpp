@@ -47,7 +47,7 @@ class UKF {
     int N = is_Q_aug_ ? kStateDimAug : kStateDim;
     double alpha = 0.001;  // 1 × 10−4 ≤ α ≤ 1
     double beta = 2.;
-    double kappa = 3 - N;  // 0.
+    double kappa = 0;//3 - N;  // 0.
     double alpha2 = alpha * alpha;
 
     double lambda = alpha2 * (N + kappa) - N;
@@ -112,6 +112,19 @@ class UKF {
 
     x0.head(kStateDim) = predicted_x_;
 
+    // {
+    //   Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_P_, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    //   Eigen::MatrixXd singularValues;
+    //   singularValues.resize(svd.singularValues().rows(), 1);
+    //   singularValues = svd.singularValues();
+    //   double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
+    //   double max_cond_number = 1e5;
+    //   std::cout << "cond: " << std::abs(cond) << std::endl;
+    //   if (std::abs(cond) > max_cond_number) {
+    //     predicted_P_ = predicted_P_.diagonal().asDiagonal();
+    //   }
+    // }
+
     P0.topLeftCorner(kStateDim, kStateDim) = predicted_P_;
     if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = Q_;
 
@@ -141,13 +154,11 @@ class UKF {
       const Eigen::VectorXd &sp = sp_mat0.col(i);
       State last_state, state;
       last_state.from_vec(sp.head(kStateDim));
-      const auto &vec_na =
-          is_Q_aug_ ? sp.segment<3>(kStateDim + 0) : Eigen::Vector3d(acc_noise_, acc_noise_, acc_noise_);
-      const auto &vec_ng =
-          is_Q_aug_ ? sp.segment<3>(kStateDim + 3) : Eigen::Vector3d(gyr_noise_, gyr_noise_, gyr_noise_);
-      const auto &vec_wa =
+      auto vec_na = is_Q_aug_ ? sp.segment<3>(kStateDim + 0) : Eigen::Vector3d(acc_noise_, acc_noise_, acc_noise_);
+      auto vec_ng = is_Q_aug_ ? sp.segment<3>(kStateDim + 3) : Eigen::Vector3d(gyr_noise_, gyr_noise_, gyr_noise_);
+      auto vec_wa =
           is_Q_aug_ ? sp.segment<3>(kStateDim + 6) : Eigen::Vector3d(acc_bias_noise_, acc_bias_noise_, acc_bias_noise_);
-      const auto &vec_wg =
+      auto vec_wg =
           is_Q_aug_ ? sp.segment<3>(kStateDim + 9) : Eigen::Vector3d(acc_bias_noise_, acc_bias_noise_, acc_bias_noise_);
       {
         const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias + vec_wa;
@@ -205,6 +216,7 @@ class UKF {
       Qi.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * dt * gyr_bias_noise_;
     }
     predicted_P_ = Fx * predicted_P_ * Fx.transpose() + Fi * Qi * Fi.transpose();
+    predicted_P_ = 0.5 * (predicted_P_ + predicted_P_.transpose());
 #endif
 
     // update state

@@ -164,6 +164,18 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
     predicted_S += ukf_ptr_->weights_cov_[c] * dz * dz.transpose();
   }
+  // {
+  //   Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_S, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  //   Eigen::MatrixXd singularValues;
+  //   singularValues.resize(svd.singularValues().rows(), 1);
+  //   singularValues = svd.singularValues();
+  //   double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
+  //   double max_cond_number = 1e5;
+  //   std::cout << "cond: " << std::abs(cond) << std::endl;
+  //   if (std::abs(cond) > max_cond_number) {
+  //     predicted_S = predicted_S.diagonal().asDiagonal();  // 提取矩阵的对角线部分并将其视为对角线矩阵
+  //   }
+  // }
   predicted_S += R;
 
   // compute Tc
@@ -181,7 +193,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   vec_vo.segment<3>(3) = rot_mat_to_vec(Tvo.linear());
   dz = vec_vo - predicted_z;
 
-  std::cout << "res: " << dz.transpose() << std::endl;
+  std::cout << "dz: " << dz.transpose() << std::endl;
 
   // int dof = 6;
   // double chi2 = dz.transpose() * predicted_S.ldlt().solve(dz);
@@ -192,12 +204,38 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   dx = K * dz;
 
-  for (int i = 0; i < dx.size(); i++) {
-    if (std::isnan(dx[i]) || std::isinf(dx[i])) return;
-  }
+  std::cout << "dx: " << dx.transpose() << std::endl;
 
-  *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + dx;
-  ukf_ptr_->state_ptr_->cov = ukf_ptr_->predicted_P_ - K * predicted_S * K.transpose();
+  // for (int i = 0; i < dx.size(); i++) {
+  //   if (std::isnan(dx[i]) || std::isinf(dx[i])) return;
+  // }
+
+  std::cout << "state vec 0: " << ukf_ptr_->state_ptr_->vec().transpose() << std::endl;
+
+  // *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + dx;
+  // ukf_ptr_->state_ptr_->cov = ukf_ptr_->state_ptr_->cov - K * predicted_S * K.transpose();
+
+  ukf_ptr_->predicted_x_ = ukf_ptr_->predicted_x_ + dx;
+  ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_ - K * predicted_S * K.transpose();
+  ukf_ptr_->predicted_P_ = 0.5 * (ukf_ptr_->predicted_P_ + ukf_ptr_->predicted_P_.transpose());
+
+  {
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(ukf_ptr_->predicted_P_, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    Eigen::MatrixXd singularValues;
+    singularValues.resize(svd.singularValues().rows(), 1);
+    singularValues = svd.singularValues();
+    double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
+    double max_cond_number = 1e5;
+    std::cout << "cond: " << std::abs(cond) << std::endl;
+    if (std::abs(cond) > max_cond_number) {
+      ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_.diagonal().asDiagonal();  // 提取矩阵的对角线部分并将其视为对角线矩阵
+    }
+  }  
+
+  ukf_ptr_->state_ptr_->from_vec(ukf_ptr_->predicted_x_);
+  ukf_ptr_->state_ptr_->cov = ukf_ptr_->predicted_P_;
+
+  std::cout << "state vec 1: " << ukf_ptr_->state_ptr_->vec().transpose() << std::endl;
 
   std::cout << "acc bias: " << ukf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << ukf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
