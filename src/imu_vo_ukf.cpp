@@ -1,13 +1,11 @@
-#include <eigen_conversions/eigen_msg.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
 #include <ros/ros.h>
+#include <sensor_msgs/Imu.h>
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <iostream>
 
-#include "imu_x_fusion/ukf.hpp"
+#include "common/view.hpp"
+#include "estimator/ukf.hpp"
 
 namespace cg {
 
@@ -15,7 +13,7 @@ constexpr int kMeasDim = 6;
 
 class UKFFusionNode {
  public:
-  UKFFusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
+  UKFFusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) : viewer_(nh) {
     std::string topic_vo = "/odom_vo";
     std::string topic_imu = "/imu0";
 
@@ -39,14 +37,11 @@ class UKFFusionNode {
     sigma_yaw *= kDegreeToRadian;
 
     ukf_ptr_ = std::make_unique<UKF>(acc_n, gyr_n, acc_w, gyr_w);
-    ukf_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    ukf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
-    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&UKF::imu_callback, ukf_ptr_.get(), _1));
+    // imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&UKF::imu_callback, ukf_ptr_.get(), _1));
+    imu_sub_ = nh.subscribe(topic_imu, 10, &UKFFusionNode::imu_callback, this);
     vo_sub_ = nh.subscribe(topic_vo, 10, &UKFFusionNode::vo_callback, this);
-
-    path_pub_ = nh.advertise<nav_msgs::Path>("path_est", 10);
-    path_pub_vo_ = nh.advertise<nav_msgs::Path>("path_vo", 10);
-    odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom_est", 10);
 
     Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
 
@@ -58,26 +53,39 @@ class UKFFusionNode {
 
   ~UKFFusionNode() {}
 
+  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
+    ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
+    imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
+    imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
+    imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
+    imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
+    imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
+    imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
+    imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
+
+    if (!ukf_ptr_->imu_model_.push_data(imu_data_ptr, initialized_)) return;
+
+    ukf_ptr_->predict(last_imu_ptr_, imu_data_ptr);
+
+    last_imu_ptr_ = imu_data_ptr;
+  }
+
   void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
-  void publish();
-
  private:
+  bool initialized_ = false;
+
+  ImuDataConstPtr last_imu_ptr_;
+
   ros::Subscriber imu_sub_;
   ros::Subscriber vo_sub_;
-
-  ros::Publisher odom_pub_;
-  ros::Publisher path_pub_;
-  ros::Publisher path_pub_vo_;
-
-  nav_msgs::Path nav_path_;
-  nav_msgs::Path nav_path_vo_;
 
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
   Eigen::Isometry3d TvoB;  // for publish
 
   UKFPtr ukf_ptr_;
+  Viewer viewer_;
 
   std::map<int, double> chi_squared_test_table_;
 };
@@ -100,27 +108,15 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
-  if (!ukf_ptr_->initialized_) {
-    if (ukf_ptr_->imu_buf_.size() < ukf_ptr_->kImuBufSize) {
-      printf("[cggos %s] ERROR: Not Enough IMU data for Initialization!!!\n", __FUNCTION__);
+  if (!initialized_) {
+    if (!(initialized_ = ukf_ptr_->imu_model_.init(*ukf_ptr_->state_ptr_, vo_msg->header.stamp.toSec(), last_imu_ptr_)))
       return;
-    }
-
-    ukf_ptr_->last_imu_ptr_ = ukf_ptr_->imu_buf_.back();
-    if (std::abs(vo_msg->header.stamp.toSec() - ukf_ptr_->last_imu_ptr_->timestamp) > 0.05) {
-      printf("[cggos %s] ERROR: timestamps are not synchronized!!!\n", __FUNCTION__);
-      return;
-    }
-
-    ukf_ptr_->state_ptr_->timestamp = ukf_ptr_->last_imu_ptr_->timestamp;
-
-    if (!ukf_ptr_->init_rot_from_imudata(ukf_ptr_->state_ptr_->r_GI, ukf_ptr_->imu_buf_)) return;
 
     ukf_ptr_->predicted_x_ = ukf_ptr_->state_ptr_->vec();
     ukf_ptr_->predicted_P_ = ukf_ptr_->state_ptr_->cov;
 
     Eigen::Isometry3d Tb0bm;
-    Tb0bm.linear() = ukf_ptr_->state_ptr_->r_GI;
+    Tb0bm.linear() = ukf_ptr_->state_ptr_->Rwb_;
     Tb0bm.translation().setZero();
 
     const Eigen::Isometry3d &Tc0cm = Tvo;
@@ -132,8 +128,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     return;
   }
 
-  // for publish, Tvo in frame W --> Tb0bn
-  TvoB = Tvw.inverse() * Tvo * Tcb;
+  std::cout << "---------------------" << std::endl;
 
   // predict measurement sigma points
   Eigen::Isometry3d Twb;
@@ -217,49 +212,12 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   std::cout << "acc bias: " << ukf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << ukf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
+  std::cout << "---------------------" << std::endl;
 
-  publish();
-}
-
-void UKFFusionNode::publish() {
-  // publish the odometry
-  std::string fixed_id = "global";
-  nav_msgs::Odometry odom_msg;
-  odom_msg.header.stamp = ros::Time::now();
-  odom_msg.header.frame_id = fixed_id;
-  odom_msg.child_frame_id = "odom";
-
-  Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
-  T_wb.linear() = ukf_ptr_->state_ptr_->r_GI;
-  T_wb.translation() = ukf_ptr_->state_ptr_->p_GI;
-  tf::poseEigenToMsg(T_wb, odom_msg.pose.pose);
-  tf::vectorEigenToMsg(ukf_ptr_->state_ptr_->v_GI, odom_msg.twist.twist.linear);
-  const Eigen::Matrix3d &P_pp = ukf_ptr_->state_ptr_->cov.block<3, 3>(0, 0);
-  const Eigen::Matrix3d &P_po = ukf_ptr_->state_ptr_->cov.block<3, 3>(0, 6);
-  const Eigen::Matrix3d &P_op = ukf_ptr_->state_ptr_->cov.block<3, 3>(6, 0);
-  const Eigen::Matrix3d &P_oo = ukf_ptr_->state_ptr_->cov.block<3, 3>(6, 6);
-  Eigen::Matrix<double, 6, 6, Eigen::RowMajor> P_imu_pose = Eigen::Matrix<double, 6, 6>::Zero();
-  P_imu_pose << P_pp, P_po, P_op, P_oo;
-  for (int i = 0; i < 36; i++) odom_msg.pose.covariance[i] = P_imu_pose.data()[i];
-  odom_pub_.publish(odom_msg);
-
-  // publish the path
-  geometry_msgs::PoseStamped pose_stamped;
-  pose_stamped.header = odom_msg.header;
-  pose_stamped.pose = odom_msg.pose.pose;
-  nav_path_.header = pose_stamped.header;
-  nav_path_.poses.push_back(pose_stamped);
-  path_pub_.publish(nav_path_);
-
-  // publish vo path
-  geometry_msgs::Pose pose_vo;
-  tf::poseEigenToMsg(TvoB, pose_vo);
-  geometry_msgs::PoseStamped pose_stamped_vo;
-  pose_stamped_vo.header = pose_stamped.header;
-  pose_stamped_vo.pose = pose_vo;
-  nav_path_vo_.header = pose_stamped_vo.header;
-  nav_path_vo_.poses.push_back(pose_stamped_vo);
-  path_pub_vo_.publish(nav_path_vo_);
+  // view
+  // for publish, Tvo in frame W --> Tb0bn
+  TvoB = Tvw.inverse() * Tvo * Tcb;
+  viewer_.publish_vo(*ukf_ptr_->state_ptr_, TvoB);
 }
 
 }  // namespace cg

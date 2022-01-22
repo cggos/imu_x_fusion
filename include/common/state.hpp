@@ -4,17 +4,14 @@
 #include <Eigen/Geometry>
 #include <memory>
 
-#include "imu_x_fusion/utils.h"
+#include "common/utils.h"
 
 namespace cg {
 
-constexpr int kStateDim = 15;
-constexpr int kNoiseDim = 12;
 constexpr double kG = 9.81007;
 
-const double kDegreeToRadian = M_PI / 180.;
-
-using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
+constexpr int kStateDim = 15;
+constexpr int kNoiseDim = 12;
 
 /**
  * @brief local or global angular error or rotation perturbation, ref: JoanSola ESKF 7.
@@ -26,24 +23,7 @@ using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
  */
 enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
 
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
-
-struct ImuData {
-  double timestamp;
-  Eigen::Vector3d acc;
-  Eigen::Vector3d gyr;
-};
-using ImuDataPtr = std::shared_ptr<ImuData>;
-using ImuDataConstPtr = std::shared_ptr<const ImuData>;
-
-struct GpsData {
-  double timestamp;
-
-  Eigen::Vector3d lla;  // Latitude in degree, longitude in degree, and altitude in meter
-  Eigen::Matrix3d cov;  // Covariance in m^2
-};
-using GpsDataPtr = std::shared_ptr<GpsData>;
-using GpsDataConstPtr = std::shared_ptr<const GpsData>;
+using MatrixSD = Eigen::Matrix<double, kStateDim, kStateDim>;
 
 class State {
  public:
@@ -53,9 +33,9 @@ class State {
   MatrixSD cov;
 
   // nominal-state
-  Eigen::Vector3d p_GI;
-  Eigen::Vector3d v_GI;
-  Eigen::Matrix3d r_GI;
+  Eigen::Vector3d p_wb_;
+  Eigen::Vector3d v_wb_;
+  Eigen::Matrix3d Rwb_;
   Eigen::Vector3d acc_bias;
   Eigen::Vector3d gyr_bias;
 
@@ -66,26 +46,26 @@ class State {
   State() {
     cov.setZero();
 
-    p_GI.setZero();
-    v_GI.setZero();
-    r_GI.setIdentity();
+    p_wb_.setZero();
+    v_wb_.setZero();
+    Rwb_.setIdentity();
     acc_bias.setZero();
     gyr_bias.setZero();
   }
 
   const Eigen::Isometry3d pose() const {
     Eigen::Isometry3d Twb;
-    Twb.linear() = r_GI;
-    Twb.translation() = p_GI;
+    Twb.linear() = Rwb_;
+    Twb.translation() = p_wb_;
     return Twb;
   }
 
   const Eigen::Matrix<double, kStateDim, 1> vec() const {
     Eigen::Matrix<double, kStateDim, 1> vec;
 
-    vec.segment<3>(0) = p_GI;
-    vec.segment<3>(3) = v_GI;
-    vec.segment<3>(6) = rot_mat_to_vec(r_GI);
+    vec.segment<3>(0) = p_wb_;
+    vec.segment<3>(3) = v_wb_;
+    vec.segment<3>(6) = rot_mat_to_vec(Rwb_);
     vec.segment<3>(9) = acc_bias;
     vec.segment<3>(12) = gyr_bias;
 
@@ -93,18 +73,37 @@ class State {
   }
 
   void from_vec(const Eigen::Matrix<double, kStateDim, 1> &vec) {
-    p_GI = vec.segment<3>(0);
-    v_GI = vec.segment<3>(3);
-    r_GI = rot_vec_to_mat(vec.segment<3>(6));
+    p_wb_ = vec.segment<3>(0);
+    v_wb_ = vec.segment<3>(3);
+    Rwb_ = rot_vec_to_mat(vec.segment<3>(6));
     acc_bias = vec.segment<3>(9);
     gyr_bias = vec.segment<3>(12);
   }
 
+  /**
+   * @brief Set the cov object
+   *
+   * @param sigma_p pos std, m
+   * @param sigma_v vel std, m/s
+   * @param sigma_rp roll pitch std
+   * @param sigma_yaw yaw std
+   * @param sigma_ba Acc bias
+   * @param sigma_bg Gyr bias
+   */
+  void set_cov(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
+    cov.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * sigma_p * sigma_p;
+    cov.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * sigma_v * sigma_v;
+    cov.block<2, 2>(6, 6) = Eigen::Matrix2d::Identity() * sigma_rp * sigma_rp;
+    cov(8, 8) = sigma_yaw * sigma_yaw;
+    cov.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * sigma_ba * sigma_ba;
+    cov.block<3, 3>(12, 12) = Eigen::Matrix3d::Identity() * sigma_bg * sigma_bg;
+  }
+
   State &operator=(const State &rhs) {
     if (this == &rhs) return *this;
-    p_GI = rhs.p_GI;
-    v_GI = rhs.v_GI;
-    r_GI = rhs.r_GI;
+    p_wb_ = rhs.p_wb_;
+    v_wb_ = rhs.v_wb_;
+    Rwb_ = rhs.Rwb_;
     acc_bias = rhs.acc_bias;
     gyr_bias = rhs.gyr_bias;
     return *this;
@@ -112,9 +111,9 @@ class State {
 
   State operator+(const Eigen::Matrix<double, kStateDim, 1> &delta_x) const {
     State state;
-    state.p_GI = this->p_GI + delta_x.block<3, 1>(0, 0);
-    state.v_GI = this->v_GI + delta_x.block<3, 1>(3, 0);
-    state.r_GI = rotation_update(this->r_GI, delta_rot_mat(delta_x.block<3, 1>(6, 0)));
+    state.p_wb_ = this->p_wb_ + delta_x.block<3, 1>(0, 0);
+    state.v_wb_ = this->v_wb_ + delta_x.block<3, 1>(3, 0);
+    state.Rwb_ = rotation_update(this->Rwb_, delta_rot_mat(delta_x.block<3, 1>(6, 0)));
     state.acc_bias = this->acc_bias + delta_x.block<3, 1>(9, 0);
     state.gyr_bias = this->gyr_bias + delta_x.block<3, 1>(12, 0);
     return state;
@@ -122,9 +121,9 @@ class State {
 
   Eigen::Matrix<double, kStateDim, 1> operator-(const State &rhs) const {
     Eigen::Matrix<double, kStateDim, 1> delta_x;
-    delta_x.block<3, 1>(0, 0) = this->p_GI - rhs.p_GI;
-    delta_x.block<3, 1>(3, 0) = this->v_GI - rhs.v_GI;
-    delta_x.block<3, 1>(6, 0) = rotation_residual(this->r_GI, rhs.r_GI);
+    delta_x.block<3, 1>(0, 0) = this->p_wb_ - rhs.p_wb_;
+    delta_x.block<3, 1>(3, 0) = this->v_wb_ - rhs.v_wb_;
+    delta_x.block<3, 1>(6, 0) = rotation_residual(this->Rwb_, rhs.Rwb_);
     delta_x.block<3, 1>(9, 0) = this->acc_bias - rhs.acc_bias;
     delta_x.block<3, 1>(12, 0) = this->gyr_bias - rhs.gyr_bias;
     return delta_x;
