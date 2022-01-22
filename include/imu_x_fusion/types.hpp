@@ -4,6 +4,8 @@
 #include <Eigen/Geometry>
 #include <memory>
 
+#include "imu_x_fusion/utils.h"
+
 namespace cg {
 
 constexpr int kStateDim = 15;
@@ -78,6 +80,26 @@ class State {
     return Twb;
   }
 
+  const Eigen::Matrix<double, kStateDim, 1> vec() const {
+    Eigen::Matrix<double, kStateDim, 1> vec;
+
+    vec.segment<3>(0) = p_GI;
+    vec.segment<3>(3) = v_GI;
+    vec.segment<3>(6) = rot_mat_to_vec(r_GI);
+    vec.segment<3>(9) = acc_bias;
+    vec.segment<3>(12) = gyr_bias;
+
+    return vec;
+  }
+
+  void from_vec(const Eigen::Matrix<double, kStateDim, 1> &vec) {
+    p_GI = vec.segment<3>(0);
+    v_GI = vec.segment<3>(3);
+    r_GI = rot_vec_to_mat(vec.segment<3>(6));
+    acc_bias = vec.segment<3>(9);
+    gyr_bias = vec.segment<3>(12);
+  }
+
   State &operator=(const State &rhs) {
     if (this == &rhs) return *this;
     p_GI = rhs.p_GI;
@@ -118,7 +140,7 @@ class State {
   static Eigen::Matrix3d delta_rot_mat(const Eigen::Vector3d &delta_rot_vec, int flag = 0) {
     Eigen::Matrix3d deltaR = Eigen::Matrix3d::Identity();
     if (flag == 0 && delta_rot_vec.norm() > DBL_EPSILON) {
-      deltaR = Eigen::AngleAxisd(delta_rot_vec.norm(), delta_rot_vec.normalized()).toRotationMatrix();
+      deltaR = rot_vec_to_mat(delta_rot_vec);
     }
     if (flag == 1) {
       Eigen::Quaterniond delta_q;
