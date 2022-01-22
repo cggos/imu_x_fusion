@@ -9,7 +9,7 @@
 
 namespace cg {
 
-ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;  // TODO
+ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;
 
 constexpr int kStateDimAug = kStateDim + kNoiseDim;
 
@@ -29,14 +29,6 @@ class UKF {
   explicit UKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
       : acc_noise_(acc_n), gyr_noise_(gyr_n), acc_bias_noise_(acc_w), gyr_bias_noise_(gyr_w) {
     state_ptr_ = std::make_shared<State>();
-
-    if (is_Q_aug_) {
-      Q_ = Eigen::Matrix<double, kNoiseDim, kNoiseDim>::Zero();
-      Q_.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * acc_noise_ * acc_noise_;
-      Q_.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * gyr_noise_ * gyr_noise_;
-      Q_.block<3, 3>(6, 6) = Eigen::Matrix3d::Identity() * acc_bias_noise_ * acc_bias_noise_;
-      Q_.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * gyr_bias_noise_ * gyr_bias_noise_;
-    }
 
     sigma_points_num_ = is_Q_aug_ ? 2 * kStateDimAug + 1 : 2 * kStateDim + 1;
 
@@ -104,6 +96,21 @@ class UKF {
     const double dt = curr_imu->timestamp - last_imu->timestamp;
     const double dt2 = dt * dt;
 
+    Eigen::Matrix<double, kStateDim, kStateDim> Qd;
+    Eigen::Matrix<double, kNoiseDim, kNoiseDim> Qi = Eigen::Matrix<double, kNoiseDim, kNoiseDim>::Zero();
+    {
+      // Fi
+      Eigen::Matrix<double, kStateDim, kNoiseDim> Fi = Eigen::Matrix<double, kStateDim, kNoiseDim>::Zero();
+      Fi.block<12, kNoiseDim>(3, 0) = Eigen::Matrix<double, 12, kNoiseDim>::Identity();
+      // Qi
+      Qi.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * dt2 * acc_noise_;
+      Qi.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * dt2 * gyr_noise_;
+      Qi.block<3, 3>(6, 6) = Eigen::Matrix3d::Identity() * dt * acc_bias_noise_;
+      Qi.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * dt * gyr_bias_noise_;
+      // Qd
+      Qd = Fi * Qi * Fi.transpose();
+    }
+
     // compute sigma points
     int N0 = is_Q_aug_ ? kStateDimAug : kStateDim;
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(N0);
@@ -113,7 +120,7 @@ class UKF {
     x0.head(kStateDim) = predicted_x_;
 
     P0.topLeftCorner(kStateDim, kStateDim) = predicted_P_;
-    if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = Q_;
+    if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = Qi;  // TODO: Q with dt or not ?
 
     Eigen::MatrixXd L;
 #if 1
@@ -167,44 +174,35 @@ class UKF {
     }
 
     // predict sigma points covariance
-#if 0
-    predicted_P_ = Eigen::MatrixXd::Zero(kStateDim, kStateDim);
-    Eigen::VectorXd dx = Eigen::VectorXd(kStateDim);
-    for (int c = 0; c < sigma_points_num_; c++) {
-      dx = predicted_sp_mat_.col(c) - predicted_x_;
-      predicted_P_ += weights_cov_[c] * dx * dx.transpose();
-    }
-    // predicted_P_.noalias() += Fi * Qi * Fi.transpose();
-#else  // JUKF
-    MatrixSD Fx = MatrixSD::Identity();
-    Eigen::Matrix<double, kStateDim, kNoiseDim> Fi = Eigen::Matrix<double, kStateDim, kNoiseDim>::Zero();
-    Eigen::Matrix<double, kNoiseDim, kNoiseDim> Qi = Eigen::Matrix<double, kNoiseDim, kNoiseDim>::Zero();
-    {
-      State last_state = *state_ptr_;
-      const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias;
-      const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias;
-      const auto &dR = State::delta_rot_mat(gyr_unbias * dt);
-      // Fx
-      Fx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * dt;
-      Fx.block<3, 3>(3, 6) = -state_ptr_->r_GI * cg::skew_matrix(acc_unbias) * dt;
-      Fx.block<3, 3>(3, 9) = -state_ptr_->r_GI * dt;
-      if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
-        Fx.block<3, 3>(6, 6) = dR.transpose();
-        Fx.block<3, 3>(6, 12) = -Eigen::Matrix3d::Identity() * dt;
-      } else {
-        Fx.block<3, 3>(6, 12) = -state_ptr_->r_GI * dt;
+    if (!is_JUKF_) {
+      predicted_P_ = Eigen::MatrixXd::Zero(kStateDim, kStateDim);
+      Eigen::VectorXd dx = Eigen::VectorXd(kStateDim);
+      for (int c = 0; c < sigma_points_num_; c++) {
+        dx = predicted_sp_mat_.col(c) - predicted_x_;
+        predicted_P_ += weights_cov_[c] * dx * dx.transpose();
       }
-      // Fi
-      Fi.block<12, kNoiseDim>(3, 0) = Eigen::Matrix<double, 12, kNoiseDim>::Identity();
-      // Qi
-      Qi.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity() * dt2 * acc_noise_;
-      Qi.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * dt2 * gyr_noise_;
-      Qi.block<3, 3>(6, 6) = Eigen::Matrix3d::Identity() * dt * acc_bias_noise_;
-      Qi.block<3, 3>(9, 9) = Eigen::Matrix3d::Identity() * dt * gyr_bias_noise_;
+      predicted_P_.noalias() += Qd;  // will diverge if not add Q
+    } else {
+      MatrixSD Fx = MatrixSD::Identity();
+      {
+        State last_state = *state_ptr_;
+        const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias;
+        const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias;
+        const auto &dR = State::delta_rot_mat(gyr_unbias * dt);
+        // Fx
+        Fx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * dt;
+        Fx.block<3, 3>(3, 6) = -state_ptr_->r_GI * cg::skew_matrix(acc_unbias) * dt;
+        Fx.block<3, 3>(3, 9) = -state_ptr_->r_GI * dt;
+        if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
+          Fx.block<3, 3>(6, 6) = dR.transpose();
+          Fx.block<3, 3>(6, 12) = -Eigen::Matrix3d::Identity() * dt;
+        } else {
+          Fx.block<3, 3>(6, 12) = -state_ptr_->r_GI * dt;
+        }
+      }
+      predicted_P_ = Fx * predicted_P_ * Fx.transpose() + Qd;
     }
-    predicted_P_ = Fx * predicted_P_ * Fx.transpose() + Fi * Qi * Fi.transpose();
     predicted_P_ = 0.5 * (predicted_P_ + predicted_P_.transpose());
-#endif
 
     // update state
     state_ptr_->timestamp = curr_imu->timestamp;
@@ -265,10 +263,11 @@ class UKF {
   double gyr_noise_;
   double acc_bias_noise_;
   double gyr_bias_noise_;
-  Eigen::Matrix<double, kNoiseDim, kNoiseDim> Q_;
+
+  bool is_Q_aug_ = true;  // P  <--  [P Q]  or  P + Q
+  bool is_JUKF_ = false;   // same with EKF for cov propagation or not
 
  public:
-  bool is_Q_aug_ = true;  // P  <--  [P Q]  or  P + Q
   double scale_;
   int sigma_points_num_;
   std::vector<double> weights_mean_;
