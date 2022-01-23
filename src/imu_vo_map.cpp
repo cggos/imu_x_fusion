@@ -55,8 +55,13 @@ class MAPFusionNode {
     sigma_rp *= kDegreeToRadian;
     sigma_yaw *= kDegreeToRadian;
 
-    map_ptr_ = std::make_shared<MAP>();
+    map_ptr_ = std::make_shared<MAP>(acc_n, gyr_n, acc_w, gyr_w);
     // map_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+
+    // init bias
+    Eigen::Vector3d acc_bias(-0.0108563, 0.0796346, 0.136003);
+    Eigen::Vector3d gyr_bias(0.00224079, 0.0218608, 0.0736346);
+    map_ptr_->state_ptr_->set_bias(acc_bias, gyr_bias);
 
     imu_sub_ = nh.subscribe(topic_imu, 10, &MAPFusionNode::imu_callback, this);
     vo_sub_ = nh.subscribe(topic_vo, 10, &MAPFusionNode::vo_callback, this);
@@ -95,7 +100,6 @@ class MAPFusionNode {
 
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
-  Eigen::Isometry3d TvoB;  // for publish
 
   MAPPtr map_ptr_;
   Viewer viewer_;
@@ -206,23 +210,31 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 #if WITH_CS
   Eigen::Matrix<double, kStateDim, 1> state_vec = map_ptr_->state_ptr_->vec();
 
-  ceres::Problem problem;
-  ceres::LossFunction *loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
-  ceres::CostFunction *cost_function = new MAPCostFunctor(Tcb, Tvw, Tvo);
-  problem.AddResidualBlock(cost_function, loss_function, state_vec.data());
+  Eigen::Matrix<double, 3, 1> vec_p = state_vec.segment<3>(0);
+  Eigen::Matrix<double, 3, 1> vec_R = state_vec.segment<3>(6);
+  {
+    ceres::Problem problem;
+    ceres::LossFunction *loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
+    ceres::CostFunction *cost_function = new MAPCostFunctor(Tcb, Tvw, Tvo, R);
+    // ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+    // problem.AddParameterBlock(vec_pose, 7, local_parameterization);
+    problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_R.data());
 
-  ceres::Solver::Options options;
-  // options.dynamic_sparsity = true;
-  options.max_num_iterations = 100;
-  // options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
-  options.minimizer_type = ceres::TRUST_REGION;
-  options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-  options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
-  options.minimizer_progress_to_stdout = true;
+    ceres::Solver::Options options;
+    options.dynamic_sparsity = true;
+    options.max_num_iterations = 100;
+    options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
+    options.minimizer_type = ceres::TRUST_REGION;
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+    options.minimizer_progress_to_stdout = true;
 
-  ceres::Solver::Summary summary;
-  ceres::Solve(options, &problem, &summary);
-  std::cout << summary.BriefReport() << "\n";
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    std::cout << summary.BriefReport() << "\n";
+  }
+  state_vec.segment<3>(0) = vec_p;
+  state_vec.segment<3>(6) = vec_R;
 
   state_est.from_vec(state_vec);
 #endif
@@ -251,7 +263,7 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   // view
   // for publish, Tvo in frame W --> Tb0bn
-  TvoB = Tvw.inverse() * Tvo * Tcb;
+  Eigen::Isometry3d TvoB = Tvw.inverse() * Tvo * Tcb;
   viewer_.publish_vo(*map_ptr_->state_ptr_, TvoB);
 }
 

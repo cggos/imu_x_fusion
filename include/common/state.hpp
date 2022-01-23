@@ -53,6 +53,11 @@ class State {
     gyr_bias.setZero();
   }
 
+  void set_bias(const Eigen::Vector3d &ba, const Eigen::Vector3d &bg) {
+    acc_bias = ba;
+    gyr_bias = bg;
+  }
+
   const Eigen::Isometry3d pose() const {
     Eigen::Isometry3d Twb;
     Twb.linear() = Rwb_;
