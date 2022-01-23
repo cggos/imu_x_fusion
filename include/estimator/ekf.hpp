@@ -1,7 +1,5 @@
 #pragma once
 
-#include <sensor_msgs/Imu.h>
-
 #include "common/state.hpp"
 #include "common/utils.h"
 #include "estimator/kf.h"

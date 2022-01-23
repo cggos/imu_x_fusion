@@ -80,7 +80,7 @@ plot the result path (fusion_gps.csv & fusion_state.csv) on Google Map using the
 ##### run ORB-SLAM2 (Stereo) and play back bag file
 
 ```sh
-roslaunch imu_x_fusion imu_vo_fusion.launch [filter:=ekf]
+roslaunch imu_x_fusion imu_vo_fusion.launch [est:=ekf]
 
 # https://github.com/cggos/orbslam2_cg
 # pose cov:
@@ -107,7 +107,7 @@ results(Green path: estimated pose; Red path: pose of VO):
 Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/wYejg2zlD)
 
 ```sh
-roslaunch imu_x_fusion imu_vo_fusion.launch [filter:=ekf]
+roslaunch imu_x_fusion imu_vo_fusion.launch [est:=ekf]
 
 rosbag play orbslam2_v101easy.bag
 ```

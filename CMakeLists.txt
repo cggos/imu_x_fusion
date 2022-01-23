@@ -159,6 +159,9 @@ target_link_libraries(imu_vo_ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 add_executable(imu_vo_ukf_node src/imu_vo_ukf.cpp src/utils.cpp)
 target_link_libraries(imu_vo_ukf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
+add_executable(imu_vo_map_node src/imu_vo_map.cpp src/utils.cpp)
+target_link_libraries(imu_vo_map_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
 #############
 ## Install ##
 #############
