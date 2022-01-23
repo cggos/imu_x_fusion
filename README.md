@@ -7,6 +7,7 @@
   - [x] ESKF: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
   - [x] IEKF: https://cggos.github.io/map-mle-ols-gn-iekf-ekf.html#iekf
   - [x] UKF(including JUKF and SVD-UKF, Doc: comming soon)
+  - [x] MAP(User-defined G-N, Ceres-Solver, TODO: fix poor result)
 
 -----
 
@@ -138,7 +139,11 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
     - [x] JUKF
     - [x] SVD-UKF
   - [ ] Particle Filter
-  - [ ] MAP(GN/LM)
+  - [ ] MAP
+    - [x] User-defined G-N
+    - [x] Ceres-Solver
+    - [ ] G2O
+    - [ ] GTSAM
 
 * Local / Global Angular Error (Rotation Perturbation)
   - [x] Local Angular Error (OK)
