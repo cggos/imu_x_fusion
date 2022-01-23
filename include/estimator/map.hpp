@@ -5,13 +5,9 @@
 
 namespace cg {
 
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
-
 class MAP {
  public:
   StatePtr state_ptr_;
-
-  const JACOBIAN_MEASUREMENT kJacobMeasurement_ = JACOBIAN_MEASUREMENT::HX_X;
 
   MAP() { state_ptr_ = std::make_shared<State>(); }
 
