@@ -3,7 +3,7 @@
 * IMU + GPS
   - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cggos.github.io/sensorfusion-imu-gnss.html)
 
-* IMU + VO (Stereo)
+* IMU + 6DoF Odom (Stereo Visual Odometry)
   - [x] ESKF: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
   - [x] IEKF: https://cggos.github.io/map-mle-ols-gn-iekf-ekf.html#iekf
   - [x] UKF(including JUKF and SVD-UKF, Doc: comming soon)
@@ -74,15 +74,17 @@ plot the result path (fusion_gps.csv & fusion_state.csv) on Google Map using the
   <img src="imgs/google_map.jpg"/>
 </p>
 
-### IMU + VO
+### IMU + 6DoF Odom
 
 #### VO: ORB-SLAM2 (Stereo) + EuRoC V1_01_easy.bag
+
+```sh
+roslaunch imu_x_fusion imu_vo_fusion.launch [est:=ekf, ukf or map]
+```
 
 ##### run ORB-SLAM2 (Stereo) and play back bag file
 
 ```sh
-roslaunch imu_x_fusion imu_vo_fusion.launch [est:=ekf]
-
 # https://github.com/cggos/orbslam2_cg
 # pose cov:
 # sigma_pv: 0.001
@@ -108,8 +110,6 @@ results(Green path: estimated pose; Red path: pose of VO):
 Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/wYejg2zlD)
 
 ```sh
-roslaunch imu_x_fusion imu_vo_fusion.launch [est:=ekf]
-
 rosbag play orbslam2_v101easy.bag
 ```
 
@@ -129,7 +129,7 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
   - [ ] Wheel Odometer
   - [ ] Manometer
   - [x] GPS
-  - [x] VO (Stereo)
+  - [x] 6DoF Odom (Stereo Visual Odometry)
 
 * State Estimation
   - [x] EKF
@@ -153,4 +153,4 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
   ```
 
 * Debug
-  - [x] Check Jacobian Matrix for EKF(ESKF) and IEKF
+  - [x] Check Measurement Jacobian Matrix
