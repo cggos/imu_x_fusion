@@ -35,6 +35,17 @@ if(OpenCV_FOUND)
 	# link_libraries(${OpenCV_LIBS})
 endif()
 
+find_package(Ceres REQUIRED)
+if(Ceres_FOUND)
+  include_directories(${CERES_INCLUDE_DIRS})
+endif()
+
+# find_package(GTSAMCMakeTools)
+# find_package(GTSAM REQUIRED)
+# include_directories(${GTSAM_INCLUDE_DIR})
+# set(GTSAM_LIBS gtsam)
+# message("gtsam: " ${GTSAM_INCLUDE_DIR})
+
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
@@ -158,6 +169,9 @@ target_link_libraries(imu_vo_ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(imu_vo_ukf_node src/imu_vo_ukf.cpp src/utils.cpp)
 target_link_libraries(imu_vo_ukf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(imu_vo_map_node src/imu_vo_map.cpp src/utils.cpp)
+target_link_libraries(imu_vo_map_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
 #############
 ## Install ##
