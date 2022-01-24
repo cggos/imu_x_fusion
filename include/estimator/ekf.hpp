@@ -1,14 +1,13 @@
 #pragma once
 
-#include "common/state.hpp"
 #include "common/utils.h"
+#include "fusion/predictor.hpp"
 #include "sensor/imu.hpp"
 
 namespace cg {
 
-class EKF {
+class EKF : public Predictor {
  public:
-  StatePtr state_ptr_;
   StatePtr state_ptr_i_;  // for IEKF
 
   EKF() = delete;
@@ -16,8 +15,7 @@ class EKF {
   EKF(const EKF &) = delete;
 
   explicit EKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : imu_model_(acc_n, gyr_n, acc_w, gyr_w) {
-    state_ptr_ = std::make_shared<State>();
+      : Predictor(acc_n, gyr_n, acc_w, gyr_w) {
     state_ptr_i_ = std::make_shared<State>();
   }
 
@@ -52,11 +50,8 @@ class EKF {
   }
 
   ~EKF() {}
-
- public:
-  IMU imu_model_;
 };
 
-using EKFPtr = std::unique_ptr<EKF>;
+using EKFPtr = std::shared_ptr<EKF>;
 
 }  // namespace cg
