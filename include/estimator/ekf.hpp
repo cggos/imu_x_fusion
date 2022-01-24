@@ -2,7 +2,6 @@
 
 #include "common/utils.h"
 #include "fusion/predictor.hpp"
-#include "sensor/imu.hpp"
 
 namespace cg {
 
@@ -52,6 +51,6 @@ class EKF : public Predictor {
   ~EKF() {}
 };
 
-using EKFPtr = std::shared_ptr<EKF>;
+using EKFPtr = std::unique_ptr<EKF>;
 
 }  // namespace cg

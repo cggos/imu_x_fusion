@@ -38,7 +38,7 @@ class EKFFusionNode {
     sigma_rp *= kDegreeToRadian;
     sigma_yaw *= kDegreeToRadian;
 
-    ekf_ptr_ = std::make_shared<EKF>(acc_n, gyr_n, acc_w, gyr_w);
+    ekf_ptr_ = std::make_unique<EKF>(acc_n, gyr_n, acc_w, gyr_w);
     ekf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
     imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&EKF::imu_callback, ekf_ptr_.get(), _1));
@@ -57,7 +57,6 @@ class EKFFusionNode {
 
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
-  Eigen::Isometry3d TvoB;  // for publish
 
   EKFPtr ekf_ptr_;
   Viewer viewer_;
@@ -140,7 +139,7 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   // view
   // for publish, Tvo in frame W --> Tb0bn
-  TvoB = Tvw.inverse() * Tvo * Tcb;
+  Eigen::Isometry3d TvoB = Tvw.inverse() * Tvo * Tcb;
   viewer_.publish_vo(*ekf_ptr_->state_ptr_, TvoB);
 }
 

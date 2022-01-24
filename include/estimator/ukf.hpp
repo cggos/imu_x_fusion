@@ -1,7 +1,6 @@
 #pragma once
 
 #include "fusion/predictor.hpp"
-#include "sensor/imu.hpp"
 
 namespace cg {
 

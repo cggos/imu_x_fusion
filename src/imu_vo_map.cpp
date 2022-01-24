@@ -63,7 +63,7 @@ class MAPFusionNode {
     Eigen::Vector3d gyr_bias(0.00224079, 0.0218608, 0.0736346);
     map_ptr_->state_ptr_->set_bias(acc_bias, gyr_bias);
 
-    imu_sub_ = nh.subscribe(topic_imu, 10, &MAPFusionNode::imu_callback, this);
+    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&MAP::imu_callback, map_ptr_.get(), _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &MAPFusionNode::vo_callback, this);
 
     Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
@@ -71,30 +71,9 @@ class MAPFusionNode {
 
   ~MAPFusionNode() {}
 
-  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
-    ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
-    imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
-    imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
-    imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
-    imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
-    imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
-    imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
-    imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
-
-    if (!map_ptr_->imu_model_.push_data(imu_data_ptr, initialized_)) return;
-
-    map_ptr_->predict(last_imu_ptr_, imu_data_ptr);
-
-    last_imu_ptr_ = imu_data_ptr;
-  }
-
   void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
  private:
-  bool initialized_ = false;
-
-  ImuDataConstPtr last_imu_ptr_;
-
   ros::Subscriber imu_sub_;
   ros::Subscriber vo_sub_;
 
@@ -123,9 +102,8 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
-  if (!initialized_) {
-    if (!(initialized_ = map_ptr_->imu_model_.init(*map_ptr_->state_ptr_, vo_msg->header.stamp.toSec(), last_imu_ptr_)))
-      return;
+  if (!map_ptr_->inited_) {
+    if (!map_ptr_->init(vo_msg->header.stamp.toSec())) return;
 
     Eigen::Isometry3d Tb0bm;
     Tb0bm.linear() = map_ptr_->state_ptr_->Rwb_;
