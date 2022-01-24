@@ -4,8 +4,6 @@
 
 namespace cg {
 
-ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;
-
 constexpr int kStateDimAug = kStateDim + kNoiseDim;
 
 class UKF {

@@ -10,6 +10,8 @@
 
 namespace cg {
 
+ANGULAR_ERROR State::kAngError = ANGULAR_ERROR::LOCAL_ANGULAR_ERROR;
+
 class UKFFusionNode {
  public:
   UKFFusionNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) : viewer_(nh) {
