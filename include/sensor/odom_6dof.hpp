@@ -21,10 +21,10 @@ class Odom6Dof {
    * @param T
    * @return
    */
-  static Eigen::Matrix<double, kMeasDim, kStateDim> measurementH(const Eigen::Quaterniond &vo_q,
-                                                                 const Eigen::Isometry3d &T,
-                                                                 const Eigen::Isometry3d &Tvw,
-                                                                 const Eigen::Isometry3d &Tcb) {
+  static Eigen::Matrix<double, kMeasDim, kStateDim> measurement_jacobi(const Eigen::Quaterniond &vo_q,
+                                                                       const Eigen::Isometry3d &T,
+                                                                       const Eigen::Isometry3d &Tvw,
+                                                                       const Eigen::Isometry3d &Tcb) {
     Eigen::Matrix<double, kMeasDim, kStateDim> H;
     H.setZero();
 
@@ -84,7 +84,7 @@ class Odom6Dof {
     Eigen::Isometry3d Tx1 = Tvw * T1 * Tcb.inverse();
     Eigen::Isometry3d Tx2 = Tvw * T2 * Tcb.inverse();
 
-    auto H = Odom6Dof::measurementH(vo_q, Twb, Tvw, Tcb);
+    auto H = measurement_jacobi(vo_q, Twb, Tvw, Tcb);
 
     std::cout << "---------------------" << std::endl;
     std::cout << "(purt t) p res: " << (Tx1.translation() - Tx0.translation()).transpose() << std::endl;

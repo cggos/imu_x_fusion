@@ -6,10 +6,9 @@
 
 #include "common/view.hpp"
 #include "estimator/ukf.hpp"
+#include "sensor/odom_6dof.hpp"
 
 namespace cg {
-
-constexpr int kMeasDim = 6;
 
 class UKFFusionNode {
  public:

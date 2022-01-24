@@ -2,19 +2,14 @@
 
 #include "common/state.hpp"
 #include "common/utils.h"
-#include "estimator/kf.h"
 #include "sensor/imu.hpp"
 
 namespace cg {
-
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
 
 class EKF {
  public:
   StatePtr state_ptr_;
   StatePtr state_ptr_i_;  // for IEKF
-
-  const JACOBIAN_MEASUREMENT kJacobMeasurement_ = JACOBIAN_MEASUREMENT::HX_X;
 
   EKF() = delete;
 

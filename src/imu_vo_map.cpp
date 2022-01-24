@@ -9,8 +9,8 @@
 #include "common/view.hpp"
 #include "estimator/map.hpp"
 #include "estimator/map_cs.hpp"
-#include "imu_x_fusion/odom_6dof.hpp"
 #include "sensor/imu.hpp"
+#include "sensor/odom_6dof.hpp"
 
 // choose one of the four
 #define WITH_DIY 0    // User Defined
@@ -163,7 +163,7 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     const Eigen::Isometry3d &Twb_in_V = Tvw * Twb_i * Tcb.inverse();
 
     // measurement jacobian H
-    J = Odom6Dof::measurementH(vo_q, Twb_i, Tvw, Tcb);
+    J = Odom6Dof::measurement_jacobi(vo_q, Twb_i, Tvw, Tcb);
 
     // for debug
     Odom6Dof::check_jacobian(vo_q, Twb_i, Tvw, Tcb);
