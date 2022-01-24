@@ -2,20 +2,21 @@
 
 #include <sensor_msgs/Imu.h>
 
-#include "fusion/odom_base.hpp"
+#include "common/state.hpp"
 #include "sensor/imu.hpp"
 
 namespace cg {
 
-class Predictor : public OdomBase {
+class Predictor {
  public:
   Predictor() {}
 
   Predictor(const Predictor &) = delete;
 
-  Predictor(double acc_n, double gyr_n, double acc_w, double gyr_w) : imu_model_(acc_n, gyr_n, acc_w, gyr_w) {}
+  Predictor(StatePtr &state_ptr, double acc_n, double gyr_n, double acc_w, double gyr_w)
+      : state_p_(state_ptr), imu_model_(acc_n, gyr_n, acc_w, gyr_w) {}
 
-  bool init(double ts_meas) { return inited_ = imu_model_.init(*state_ptr_, ts_meas, last_imu_ptr_); }
+  bool init(double ts_meas) { return inited_ = imu_model_.init(*state_p_, ts_meas, last_imu_ptr_); }
 
   void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
     ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
@@ -40,8 +41,13 @@ class Predictor : public OdomBase {
 
  public:
   bool inited_ = false;
+
   IMU imu_model_;
   ImuDataConstPtr last_imu_ptr_;
+
+ private:
+  StatePtr state_p_;
 };
+using PredictorPtr = std::unique_ptr<Predictor>;
 
 }  // namespace cg

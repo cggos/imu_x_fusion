@@ -1,19 +1,19 @@
 #pragma once
 
-#include "fusion/predictor.hpp"
+#include "estimator/kf.hpp"
 
 namespace cg {
 
 constexpr int kStateDimAug = kStateDim + kNoiseDim;
 
-class UKF : public Predictor {
+class UKF : public KF {
  public:
   UKF() = delete;
 
   UKF(const UKF &) = delete;
 
   explicit UKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : Predictor(acc_n, gyr_n, acc_w, gyr_w) {
+      : KF(acc_n, gyr_n, acc_w, gyr_w) {
     sigma_points_num_ = is_Q_aug_ ? 2 * kStateDimAug + 1 : 2 * kStateDim + 1;
 
     weights_mean_.resize(sigma_points_num_);

@@ -1,11 +1,11 @@
 #pragma once
 
 #include "common/utils.h"
-#include "fusion/predictor.hpp"
+#include "estimator/kf.hpp"
 
 namespace cg {
 
-class EKF : public Predictor {
+class EKF : public KF {
  public:
   StatePtr state_ptr_i_;  // for IEKF
 
@@ -14,7 +14,7 @@ class EKF : public Predictor {
   EKF(const EKF &) = delete;
 
   explicit EKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : Predictor(acc_n, gyr_n, acc_w, gyr_w) {
+      : KF(acc_n, gyr_n, acc_w, gyr_w) {
     state_ptr_i_ = std::make_shared<State>();
   }
 
