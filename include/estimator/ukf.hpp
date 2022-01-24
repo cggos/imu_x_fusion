@@ -1,23 +1,20 @@
 #pragma once
 
+#include "fusion/predictor.hpp"
 #include "sensor/imu.hpp"
 
 namespace cg {
 
 constexpr int kStateDimAug = kStateDim + kNoiseDim;
 
-class UKF {
+class UKF : public Predictor {
  public:
-  StatePtr state_ptr_;
-
   UKF() = delete;
 
   UKF(const UKF &) = delete;
 
   explicit UKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : imu_model_(acc_n, gyr_n, acc_w, gyr_w) {
-    state_ptr_ = std::make_shared<State>();
-
+      : Predictor(acc_n, gyr_n, acc_w, gyr_w) {
     sigma_points_num_ = is_Q_aug_ ? 2 * kStateDimAug + 1 : 2 * kStateDim + 1;
 
     weights_mean_.resize(sigma_points_num_);
@@ -125,8 +122,6 @@ class UKF {
   bool is_JUKF_ = false;   // same with EKF for cov propagation or not
 
  public:
-  IMU imu_model_;
-
   double scale_;
   int sigma_points_num_;
   std::vector<double> weights_mean_;

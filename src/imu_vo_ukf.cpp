@@ -40,8 +40,7 @@ class UKFFusionNode {
     ukf_ptr_ = std::make_unique<UKF>(acc_n, gyr_n, acc_w, gyr_w);
     ukf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
 
-    // imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&UKF::imu_callback, ukf_ptr_.get(), _1));
-    imu_sub_ = nh.subscribe(topic_imu, 10, &UKFFusionNode::imu_callback, this);
+    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&UKF::imu_callback, ukf_ptr_.get(), _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &UKFFusionNode::vo_callback, this);
 
     Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
@@ -54,36 +53,14 @@ class UKFFusionNode {
 
   ~UKFFusionNode() {}
 
-  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
-    ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
-    imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
-    imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
-    imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
-    imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
-    imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
-    imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
-    imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
-
-    if (!ukf_ptr_->imu_model_.push_data(imu_data_ptr, initialized_)) return;
-
-    ukf_ptr_->predict(last_imu_ptr_, imu_data_ptr);
-
-    last_imu_ptr_ = imu_data_ptr;
-  }
-
   void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
  private:
-  bool initialized_ = false;
-
-  ImuDataConstPtr last_imu_ptr_;
-
   ros::Subscriber imu_sub_;
   ros::Subscriber vo_sub_;
 
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
-  Eigen::Isometry3d TvoB;  // for publish
 
   UKFPtr ukf_ptr_;
   Viewer viewer_;
@@ -109,9 +86,8 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
-  if (!initialized_) {
-    if (!(initialized_ = ukf_ptr_->imu_model_.init(*ukf_ptr_->state_ptr_, vo_msg->header.stamp.toSec(), last_imu_ptr_)))
-      return;
+  if (!ukf_ptr_->inited_) {
+    if (!ukf_ptr_->init(vo_msg->header.stamp.toSec())) return;
 
     ukf_ptr_->predicted_x_ = ukf_ptr_->state_ptr_->vec();
     ukf_ptr_->predicted_P_ = ukf_ptr_->state_ptr_->cov;
@@ -217,7 +193,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   // view
   // for publish, Tvo in frame W --> Tb0bn
-  TvoB = Tvw.inverse() * Tvo * Tcb;
+  Eigen::Isometry3d TvoB = Tvw.inverse() * Tvo * Tcb;
   viewer_.publish_vo(*ukf_ptr_->state_ptr_, TvoB);
 }
 
