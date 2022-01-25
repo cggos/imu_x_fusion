@@ -3,8 +3,8 @@
 #include <ceres/ceres.h>
 
 #include "common/state.hpp"
-#include "common/utils.h"
-#include "imu_x_fusion/odom_6dof.hpp"
+#include "common/utils.hpp"
+#include "sensor/odom_6dof.hpp"
 
 namespace cg {
 
@@ -77,7 +77,7 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
     // x_i
     Eigen::Isometry3d Twb_i;
     Twb_i.translation() = vec_p;
-    Twb_i.linear() = rot_vec_to_mat(vec_R);
+    Twb_i.linear() = Utils::rot_vec_to_mat(vec_R);
 
     // measurement estimation h(x_i), Twb in frame V --> Tc0cn
     const Eigen::Isometry3d& Twb_in_V = Tvw_ * Twb_i * Tcb_.inverse();
@@ -90,7 +90,7 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
     residual = Lt_ * residual;
 
     const auto& vo_q = Eigen::Quaterniond(Tvo_obs_.linear());
-    Eigen::Matrix<double, 6, 15> J = -1.0 * Odom6Dof::measurementH(vo_q, Twb_i, Tvw_, Tcb_);
+    Eigen::Matrix<double, 6, 15> J = -1.0 * Odom6Dof::measurement_jacobi(vo_q, Twb_i, Tvw_, Tcb_);
 
     if (jacobians != NULL) {
       if (jacobians[0] != NULL) {

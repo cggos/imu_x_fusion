@@ -126,10 +126,14 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
 
 * Sensors
   - [x] IMU
+    - [x] Numerical Integration (TODO: RK4) 
+    - [ ] Pre-Integration
   - [ ] Wheel Odometer
   - [ ] Manometer
   - [x] GPS
   - [x] 6DoF Odom (Stereo Visual Odometry)
+  - [ ] LiDAR
+  - [ ] Multi-modal data
 
 * State Estimation
   - [x] EKF

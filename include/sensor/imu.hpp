@@ -138,7 +138,7 @@ class IMU {
     // Fx
     MatrixSD Fx = MatrixSD::Identity();
     Fx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * dt;
-    Fx.block<3, 3>(3, 6) = -state.Rwb_ * cg::skew_matrix(acc_unbias) * dt;
+    Fx.block<3, 3>(3, 6) = -state.Rwb_ * Utils::skew_matrix(acc_unbias) * dt;
     Fx.block<3, 3>(3, 9) = -state.Rwb_ * dt;
     if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
       Fx.block<3, 3>(6, 6) = dR.transpose();

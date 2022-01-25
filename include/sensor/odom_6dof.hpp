@@ -21,10 +21,10 @@ class Odom6Dof {
    * @param T
    * @return
    */
-  static Eigen::Matrix<double, kMeasDim, kStateDim> measurementH(const Eigen::Quaterniond &vo_q,
-                                                                 const Eigen::Isometry3d &T,
-                                                                 const Eigen::Isometry3d &Tvw,
-                                                                 const Eigen::Isometry3d &Tcb) {
+  static Eigen::Matrix<double, kMeasDim, kStateDim> measurement_jacobi(const Eigen::Quaterniond &vo_q,
+                                                                       const Eigen::Isometry3d &T,
+                                                                       const Eigen::Isometry3d &Tvw,
+                                                                       const Eigen::Isometry3d &Tcb) {
     Eigen::Matrix<double, kMeasDim, kStateDim> H;
     H.setZero();
 
@@ -34,34 +34,34 @@ class Odom6Dof {
     Eigen::Quaterniond q_cb(Tcb.linear());
     Eigen::Quaterniond q(T.linear());
 
+    // clang-format off
     switch (kJacobMeasurement_) {
       case JACOBIAN_MEASUREMENT::HX_X: {
         H.block<3, 3>(0, 0) = Rvw;
         if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
-          H.block<3, 3>(0, 6) = -Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
-          H.block<3, 3>(3, 6) =
-              (quat_left_matrix((q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate())).block<3, 3>(1, 1);
+          H.block<3, 3>(0, 6) = -Rvw * T.linear() * Utils::skew_matrix(Tcb.inverse().translation());
+          H.block<3, 3>(3, 6) = (Utils::quat_left_matrix((q_vw * q).normalized()) * Utils::quat_right_matrix(q_cb.conjugate())).block<3, 3>(1, 1);
         } else {
-          H.block<3, 3>(0, 6) = -Rvw * skew_matrix(T.linear() * Tcb.inverse().translation());
-          H.block<3, 3>(3, 6) =
-              (quat_left_matrix(q_vw) * quat_right_matrix((q * q_cb.conjugate()).normalized())).block<3, 3>(1, 1);
+          H.block<3, 3>(0, 6) = -Rvw * Utils::skew_matrix(T.linear() * Tcb.inverse().translation());
+          H.block<3, 3>(3, 6) = (Utils::quat_left_matrix(q_vw) * Utils::quat_right_matrix((q * q_cb.conjugate()).normalized())).block<3, 3>(1, 1);
         }
       } break;
       case JACOBIAN_MEASUREMENT::NEGATIVE_RX_X: {
         Eigen::Matrix4d m4;
         H.block<3, 3>(0, 0) = -Rvw;
         if (State::kAngError == ANGULAR_ERROR::LOCAL_ANGULAR_ERROR) {
-          H.block<3, 3>(0, 6) = Rvw * T.linear() * skew_matrix(Tcb.inverse().translation());
-          m4 = quat_left_matrix((vo_q.conjugate() * q_vw * q).normalized()) * quat_right_matrix(q_cb.conjugate());
+          H.block<3, 3>(0, 6) = Rvw * T.linear() * Utils::skew_matrix(Tcb.inverse().translation());
+          m4 = Utils::quat_left_matrix((vo_q.conjugate() * q_vw * q).normalized()) * Utils::quat_right_matrix(q_cb.conjugate());
           H.block<3, 3>(3, 6) = -m4.block<3, 3>(1, 1);
         } else {
-          H.block<3, 3>(0, 6) = -Rvw * skew_matrix(T.linear() * Tcb.inverse().translation());
-          m4 = quat_left_matrix(q_vw) * quat_right_matrix((q * (vo_q * q_cb).conjugate()).normalized());
+          H.block<3, 3>(0, 6) = -Rvw * Utils::skew_matrix(T.linear() * Tcb.inverse().translation());
+          m4 = Utils::quat_left_matrix(q_vw) * Utils::quat_right_matrix((q * (vo_q * q_cb).conjugate()).normalized());
           H.block<3, 3>(3, 6) = -m4.block<3, 3>(1, 1);
         }
         H *= -1.0;
       } break;
     }
+    //clang-format on
 
     return H;
   }
@@ -84,7 +84,7 @@ class Odom6Dof {
     Eigen::Isometry3d Tx1 = Tvw * T1 * Tcb.inverse();
     Eigen::Isometry3d Tx2 = Tvw * T2 * Tcb.inverse();
 
-    auto H = Odom6Dof::measurementH(vo_q, Twb, Tvw, Tcb);
+    auto H = measurement_jacobi(vo_q, Twb, Tvw, Tcb);
 
     std::cout << "---------------------" << std::endl;
     std::cout << "(purt t) p res: " << (Tx1.translation() - Tx0.translation()).transpose() << std::endl;

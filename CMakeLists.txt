@@ -160,17 +160,17 @@ include_directories(
 ## either from message generation or dynamic reconfigure
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-add_executable(imu_gnss_ekf_node src/imu_gnss_ekf.cpp src/utils.cpp)
+add_executable(imu_gnss_ekf_node src/imu_gnss_ekf.cpp)
 set_target_properties(imu_gnss_ekf_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
 target_link_libraries(imu_gnss_ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${GeographicLib_LIBRARIES})
 
-add_executable(imu_vo_ekf_node src/imu_vo_ekf.cpp src/utils.cpp)
+add_executable(imu_vo_ekf_node src/imu_vo_ekf.cpp)
 target_link_libraries(imu_vo_ekf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(imu_vo_ukf_node src/imu_vo_ukf.cpp src/utils.cpp)
+add_executable(imu_vo_ukf_node src/imu_vo_ukf.cpp)
 target_link_libraries(imu_vo_ukf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(imu_vo_map_node src/imu_vo_map.cpp src/utils.cpp)
+add_executable(imu_vo_map_node src/imu_vo_map.cpp)
 target_link_libraries(imu_vo_map_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
 #############

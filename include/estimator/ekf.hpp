@@ -1,28 +1,20 @@
 #pragma once
 
-#include "common/state.hpp"
-#include "common/utils.h"
-#include "estimator/kf.h"
-#include "sensor/imu.hpp"
+#include "common/utils.hpp"
+#include "estimator/kf.hpp"
 
 namespace cg {
 
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
-
-class EKF {
+class EKF : public KF {
  public:
-  StatePtr state_ptr_;
   StatePtr state_ptr_i_;  // for IEKF
-
-  const JACOBIAN_MEASUREMENT kJacobMeasurement_ = JACOBIAN_MEASUREMENT::HX_X;
 
   EKF() = delete;
 
   EKF(const EKF &) = delete;
 
   explicit EKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : imu_model_(acc_n, gyr_n, acc_w, gyr_w) {
-    state_ptr_ = std::make_shared<State>();
+      : KF(acc_n, gyr_n, acc_w, gyr_w) {
     state_ptr_i_ = std::make_shared<State>();
   }
 
@@ -57,9 +49,6 @@ class EKF {
   }
 
   ~EKF() {}
-
- public:
-  IMU imu_model_;
 };
 
 using EKFPtr = std::unique_ptr<EKF>;
