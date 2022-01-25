@@ -41,15 +41,17 @@ class UKF : public KF {
   void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
     const double dt = curr_imu->timestamp - last_imu->timestamp;
 
+    state_ptr_->timestamp = curr_imu->timestamp;
+
     // compute sigma points
     int N0 = is_Q_aug_ ? kStateDimAug : kStateDim;
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(N0);
     Eigen::MatrixXd P0 = Eigen::MatrixXd::Zero(N0, N0);
     Eigen::MatrixXd sp_mat0 = Eigen::MatrixXd::Zero(N0, sigma_points_num_);
 
-    x0.head(kStateDim) = predicted_x_;
+    x0.head(kStateDim) = state_ptr_->vec();
 
-    P0.topLeftCorner(kStateDim, kStateDim) = predicted_P_;
+    P0.topLeftCorner(kStateDim, kStateDim) = state_ptr_->cov;
     if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = imu_model_.noise_cov(dt);  // TODO: Q with dt or not ?
 
     Eigen::MatrixXd L;
@@ -87,30 +89,23 @@ class UKF : public KF {
     }
 
     // predict sigma points mean
-    predicted_x_ = Eigen::VectorXd::Zero(kStateDim);
+    Eigen::VectorXd predicted_x = Eigen::VectorXd::Zero(kStateDim);
     for (int c = 0; c < sigma_points_num_; c++) {
-      predicted_x_ += weights_mean_[c] * predicted_sp_mat_.col(c);
+      predicted_x += weights_mean_[c] * predicted_sp_mat_.col(c);
     }
+    state_ptr_->from_vec(predicted_x);
 
     // predict sigma points covariance
     if (!is_JUKF_) {
-      predicted_P_ = Eigen::MatrixXd::Zero(kStateDim, kStateDim);
+      Eigen::MatrixXd predicted_P = Eigen::MatrixXd::Zero(kStateDim, kStateDim);
       Eigen::VectorXd dx = Eigen::VectorXd(kStateDim);
       for (int c = 0; c < sigma_points_num_; c++) {
-        dx = predicted_sp_mat_.col(c) - predicted_x_;
-        predicted_P_ += weights_cov_[c] * dx * dx.transpose();
+        dx = predicted_sp_mat_.col(c) - predicted_x;
+        predicted_P += weights_cov_[c] * dx * dx.transpose();
       }
-      predicted_P_.noalias() += imu_model_.noise_cov_discret_time(dt);  // will diverge if not add Q
-    } else {
+      state_ptr_->cov = predicted_P + imu_model_.noise_cov_discret_time(dt);  // will diverge if not add Q
+    } else
       imu_model_.propagate_state_cov(last_imu, curr_imu, *state_ptr_, *state_ptr_);
-      predicted_P_ = state_ptr_->cov;
-    }
-    predicted_P_ = 0.5 * (predicted_P_ + predicted_P_.transpose());
-
-    // update state
-    state_ptr_->timestamp = curr_imu->timestamp;
-    state_ptr_->from_vec(predicted_x_);
-    state_ptr_->cov = predicted_P_;
   }
 
   ~UKF() {}
@@ -126,8 +121,6 @@ class UKF : public KF {
   std::vector<double> weights_mean_;
   std::vector<double> weights_cov_;
 
-  Eigen::VectorXd predicted_x_;
-  Eigen::MatrixXd predicted_P_;
   Eigen::MatrixXd predicted_sp_mat_;
 };
 

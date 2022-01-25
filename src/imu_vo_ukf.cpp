@@ -89,9 +89,6 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   if (!ukf_ptr_->inited_) {
     if (!ukf_ptr_->init(vo_msg->header.stamp.toSec())) return;
 
-    ukf_ptr_->predicted_x_ = ukf_ptr_->state_ptr_->vec();
-    ukf_ptr_->predicted_P_ = ukf_ptr_->state_ptr_->cov;
-
     Eigen::Isometry3d Tb0bm;
     Tb0bm.linear() = ukf_ptr_->state_ptr_->Rwb_;
     Tb0bm.translation().setZero();
@@ -142,7 +139,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   Eigen::VectorXd dx;
   Eigen::MatrixXd Tc = Eigen::MatrixXd::Zero(kStateDim, kMeasDim);
   for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
-    dx = ukf_ptr_->predicted_sp_mat_.col(c) - ukf_ptr_->predicted_x_;
+    dx = ukf_ptr_->predicted_sp_mat_.col(c) - ukf_ptr_->state_ptr_->vec();
     dz = predicted_meas_sp_mat.col(c) - predicted_z;
     Tc += ukf_ptr_->weights_cov_[c] * dx * dz.transpose();
   }
@@ -165,14 +162,16 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   Eigen::MatrixXd K = Tc * predicted_S.inverse();
 
-  ukf_ptr_->predicted_x_ = ukf_ptr_->predicted_x_ + K * dz;
-  ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_ - K * predicted_S * K.transpose();
-  ukf_ptr_->predicted_P_ = 0.5 * (ukf_ptr_->predicted_P_ + ukf_ptr_->predicted_P_.transpose());
+  *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + K * dz;
+
+  Eigen::MatrixXd predicted_P;
+  predicted_P = ukf_ptr_->state_ptr_->cov - K * predicted_S * K.transpose();
+  predicted_P = 0.5 * (predicted_P + predicted_P.transpose());
 
   // condition number
   // 解决：因观测误差较大，使P负定，致使后面P的Cholesky分解失败出现NaN，导致滤波器发散
   {
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(ukf_ptr_->predicted_P_, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_P, Eigen::ComputeThinU | Eigen::ComputeThinV);
     Eigen::MatrixXd singularValues;
     singularValues.resize(svd.singularValues().rows(), 1);
     singularValues = svd.singularValues();
@@ -180,12 +179,10 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     double max_cond_number = 1e5;
     std::cout << "cond num of P: " << std::abs(cond) << std::endl;
     if (std::abs(cond) > max_cond_number) {
-      ukf_ptr_->predicted_P_ = ukf_ptr_->predicted_P_.diagonal().asDiagonal();
+      predicted_P = predicted_P.diagonal().asDiagonal();
     }
   }
-
-  ukf_ptr_->state_ptr_->from_vec(ukf_ptr_->predicted_x_);
-  ukf_ptr_->state_ptr_->cov = ukf_ptr_->predicted_P_;
+  ukf_ptr_->state_ptr_->cov = predicted_P;
 
   std::cout << "acc bias: " << ukf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << ukf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
