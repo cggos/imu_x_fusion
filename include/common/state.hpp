@@ -4,7 +4,7 @@
 #include <Eigen/Geometry>
 #include <memory>
 
-#include "common/utils.h"
+#include "common/utils.hpp"
 
 namespace cg {
 
@@ -70,7 +70,7 @@ class State {
 
     vec.segment<3>(0) = p_wb_;
     vec.segment<3>(3) = v_wb_;
-    vec.segment<3>(6) = rot_mat_to_vec(Rwb_);
+    vec.segment<3>(6) = Utils::rot_mat_to_vec(Rwb_);
     vec.segment<3>(9) = acc_bias;
     vec.segment<3>(12) = gyr_bias;
 
@@ -80,7 +80,7 @@ class State {
   void from_vec(const Eigen::Matrix<double, kStateDim, 1> &vec) {
     p_wb_ = vec.segment<3>(0);
     v_wb_ = vec.segment<3>(3);
-    Rwb_ = rot_vec_to_mat(vec.segment<3>(6));
+    Rwb_ = Utils::rot_vec_to_mat(vec.segment<3>(6));
     acc_bias = vec.segment<3>(9);
     gyr_bias = vec.segment<3>(12);
   }
@@ -144,7 +144,7 @@ class State {
   static Eigen::Matrix3d delta_rot_mat(const Eigen::Vector3d &delta_rot_vec, int flag = 0) {
     Eigen::Matrix3d deltaR = Eigen::Matrix3d::Identity();
     if (flag == 0 && delta_rot_vec.norm() > DBL_EPSILON) {
-      deltaR = rot_vec_to_mat(delta_rot_vec);
+      deltaR = Utils::rot_vec_to_mat(delta_rot_vec);
     }
     if (flag == 1) {
       Eigen::Quaterniond delta_q;

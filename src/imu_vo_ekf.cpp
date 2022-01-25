@@ -4,7 +4,7 @@
 #include <deque>
 #include <iostream>
 
-#include "common/utils.h"
+#include "common/utils.hpp"
 #include "common/view.hpp"
 #include "estimator/ekf.hpp"
 #include "sensor/odom_6dof.hpp"
@@ -44,7 +44,7 @@ class EKFFusionNode {
     imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&EKF::imu_callback, ekf_ptr_.get(), _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &EKFFusionNode::vo_callback, this);
 
-    Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
+    Tcb = Utils::getTransformEigen(pnh, "cam0/T_cam_imu");
   }
 
   ~EKFFusionNode() {}

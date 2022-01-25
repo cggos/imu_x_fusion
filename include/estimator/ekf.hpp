@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/utils.h"
+#include "common/utils.hpp"
 #include "estimator/kf.hpp"
 
 namespace cg {

@@ -101,7 +101,7 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
   Eigen::Matrix<double, 3, kStateDim> H;
   H.setZero();
   H.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
-  H.block<3, 3>(0, 6) = -ekf_ptr_->state_ptr_->Rwb_ * cg::skew_matrix(I_p_Gps_);
+  H.block<3, 3>(0, 6) = -ekf_ptr_->state_ptr_->Rwb_ * Utils::skew_matrix(I_p_Gps_);
 
   // measurement covariance
   const Eigen::Matrix3d &R = gps_data_ptr->cov;

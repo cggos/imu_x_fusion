@@ -5,7 +5,7 @@
 #include <iostream>
 #include <memory>
 
-#include "common/utils.h"
+#include "common/utils.hpp"
 #include "common/view.hpp"
 #include "estimator/map.hpp"
 #include "estimator/map_cs.hpp"
@@ -66,7 +66,7 @@ class MAPFusionNode {
     imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&MAP::imu_callback, map_ptr_.get(), _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &MAPFusionNode::vo_callback, this);
 
-    Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
+    Tcb = Utils::getTransformEigen(pnh, "cam0/T_cam_imu");
   }
 
   ~MAPFusionNode() {}

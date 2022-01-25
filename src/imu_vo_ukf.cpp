@@ -40,7 +40,7 @@ class UKFFusionNode {
     imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&UKF::imu_callback, ukf_ptr_.get(), _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &UKFFusionNode::vo_callback, this);
 
-    Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
+    Tcb = Utils::getTransformEigen(pnh, "cam0/T_cam_imu");
   }
 
   ~UKFFusionNode() {}

@@ -59,7 +59,7 @@ class UKF : public KF {
     {
       Eigen::Matrix<double, kMeasDim, 1> vec_vo;
       vec_vo.segment<3>(0) = Tvo.translation();
-      vec_vo.segment<3>(3) = rot_mat_to_vec(Tvo.linear());
+      vec_vo.segment<3>(3) = Utils::rot_mat_to_vec(Tvo.linear());
       dz = vec_vo - predicted_z_;
     }
 
@@ -72,16 +72,9 @@ class UKF : public KF {
     // condition number
     // 解决：因观测误差较大，使P负定，致使后面P的Cholesky分解失败出现NaN，导致滤波器发散
     {
-      Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_P, Eigen::ComputeThinU | Eigen::ComputeThinV);
-      Eigen::MatrixXd singularValues;
-      singularValues.resize(svd.singularValues().rows(), 1);
-      singularValues = svd.singularValues();
-      double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
-      double max_cond_number = 1e5;
-      std::cout << "cond num of P: " << std::abs(cond) << std::endl;
-      if (std::abs(cond) > max_cond_number) {
-        predicted_P = predicted_P.diagonal().asDiagonal();
-      }
+      double cond_num = Utils::condition_number(predicted_P);
+      std::cout << "cond num of P: " << cond_num << std::endl;
+      if (cond_num > 1e5) predicted_P = predicted_P.diagonal().asDiagonal();
     }
     state_ptr_->cov = predicted_P;
   }
@@ -188,13 +181,13 @@ class UKF : public KF {
       const auto &sp = predicted_sp_mat_.col(i);
 
       Twb.translation() = sp.segment<3>(0);
-      Twb.linear() = rot_vec_to_mat(sp.segment<3>(6));
+      Twb.linear() = Utils::rot_vec_to_mat(sp.segment<3>(6));
 
       // measurement estimation h(x), Twb in frame V --> Tc0cn
       const Eigen::Isometry3d &Twb_in_V = Tvw * Twb * Tcb.inverse();
 
       predicted_meas_sp_mat_.col(i).segment<3>(0) = Twb_in_V.translation();
-      predicted_meas_sp_mat_.col(i).segment<3>(3) = rot_mat_to_vec(Twb_in_V.linear());
+      predicted_meas_sp_mat_.col(i).segment<3>(3) = Utils::rot_mat_to_vec(Twb_in_V.linear());
     }
   }
 
