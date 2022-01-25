@@ -1,12 +1,9 @@
 #include <ros/ros.h>
-#include <sensor_msgs/Imu.h>
 
-#include <boost/math/distributions/chi_squared.hpp>
 #include <iostream>
 
 #include "common/view.hpp"
 #include "estimator/ukf.hpp"
-#include "sensor/odom_6dof.hpp"
 
 namespace cg {
 
@@ -44,11 +41,6 @@ class UKFFusionNode {
     vo_sub_ = nh.subscribe(topic_vo, 10, &UKFFusionNode::vo_callback, this);
 
     Tcb = getTransformEigen(pnh, "cam0/T_cam_imu");
-
-    for (int i = 1; i < 100; ++i) {
-      boost::math::chi_squared chi_squared_dist(i);
-      chi_squared_test_table_[i] = boost::math::quantile(chi_squared_dist, 0.05);
-    }
   }
 
   ~UKFFusionNode() {}
@@ -64,8 +56,6 @@ class UKFFusionNode {
 
   UKFPtr ukf_ptr_;
   Viewer viewer_;
-
-  std::map<int, double> chi_squared_test_table_;
 };
 
 void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg) {
@@ -83,7 +73,7 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   Tvo.linear() = vo_q.toRotationMatrix();
   Tvo.translation() = vo_p;
 
-  const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
+  ukf_ptr_->measurement_noise_cov_ =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
   if (!ukf_ptr_->inited_) {
@@ -102,88 +92,9 @@ void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     return;
   }
 
+  ukf_ptr_->update(Tvw, Tcb, Tvo);
+
   std::cout << "---------------------" << std::endl;
-
-  // predict measurement sigma points
-  Eigen::Isometry3d Twb;
-  Eigen::MatrixXd predicted_meas_sp_mat = Eigen::MatrixXd::Zero(kMeasDim, ukf_ptr_->sigma_points_num_);
-  for (int i = 0; i < ukf_ptr_->sigma_points_num_; i++) {
-    const auto &sp = ukf_ptr_->predicted_sp_mat_.col(i);
-
-    Twb.translation() = sp.segment<3>(0);
-    Twb.linear() = rot_vec_to_mat(sp.segment<3>(6));
-
-    // measurement estimation h(x), Twb in frame V --> Tc0cn
-    const Eigen::Isometry3d &Twb_in_V = Tvw * Twb * Tcb.inverse();
-
-    predicted_meas_sp_mat.col(i).segment<3>(0) = Twb_in_V.translation();
-    predicted_meas_sp_mat.col(i).segment<3>(3) = rot_mat_to_vec(Twb_in_V.linear());
-  }
-
-  // predict measurement mean
-  Eigen::VectorXd predicted_z = Eigen::VectorXd::Zero(kMeasDim);
-  for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
-    predicted_z += ukf_ptr_->weights_mean_[c] * predicted_meas_sp_mat.col(c);
-  }
-
-  // predict measurement covariance
-  Eigen::MatrixXd predicted_S = Eigen::MatrixXd::Zero(kMeasDim, kMeasDim);
-  Eigen::VectorXd dz = Eigen::VectorXd(kMeasDim);
-  for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
-    dz = predicted_meas_sp_mat.col(c) - predicted_z;
-    predicted_S += ukf_ptr_->weights_cov_[c] * dz * dz.transpose();
-  }
-  predicted_S += R;
-
-  // compute Tc
-  Eigen::VectorXd dx;
-  Eigen::MatrixXd Tc = Eigen::MatrixXd::Zero(kStateDim, kMeasDim);
-  for (int c = 0; c < ukf_ptr_->sigma_points_num_; c++) {
-    dx = ukf_ptr_->predicted_sp_mat_.col(c) - ukf_ptr_->state_ptr_->vec();
-    dz = predicted_meas_sp_mat.col(c) - predicted_z;
-    Tc += ukf_ptr_->weights_cov_[c] * dx * dz.transpose();
-  }
-
-  // update
-  Eigen::Matrix<double, kMeasDim, 1> vec_vo;
-  vec_vo.segment<3>(0) = Tvo.translation();
-  vec_vo.segment<3>(3) = rot_mat_to_vec(Tvo.linear());
-  dz = vec_vo - predicted_z;
-
-  // chi-square gating test
-  const float scale = 200;
-  const int dof = kMeasDim;
-  double chi2 = dz.transpose() * predicted_S.ldlt().solve(dz);
-  std::cout << "chi2: " << chi2 << std::endl;
-  if (chi2 >= scale * chi_squared_test_table_[dof]) {
-    // TODO
-    // return;
-  }
-
-  Eigen::MatrixXd K = Tc * predicted_S.inverse();
-
-  *ukf_ptr_->state_ptr_ = *ukf_ptr_->state_ptr_ + K * dz;
-
-  Eigen::MatrixXd predicted_P;
-  predicted_P = ukf_ptr_->state_ptr_->cov - K * predicted_S * K.transpose();
-  predicted_P = 0.5 * (predicted_P + predicted_P.transpose());
-
-  // condition number
-  // 解决：因观测误差较大，使P负定，致使后面P的Cholesky分解失败出现NaN，导致滤波器发散
-  {
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(predicted_P, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Eigen::MatrixXd singularValues;
-    singularValues.resize(svd.singularValues().rows(), 1);
-    singularValues = svd.singularValues();
-    double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
-    double max_cond_number = 1e5;
-    std::cout << "cond num of P: " << std::abs(cond) << std::endl;
-    if (std::abs(cond) > max_cond_number) {
-      predicted_P = predicted_P.diagonal().asDiagonal();
-    }
-  }
-  ukf_ptr_->state_ptr_->cov = predicted_P;
-
   std::cout << "acc bias: " << ukf_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << ukf_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
   std::cout << "---------------------" << std::endl;

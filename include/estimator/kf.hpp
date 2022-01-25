@@ -32,6 +32,10 @@ class KF : public StateEstimator, public Predictor {
   }
 
   virtual ~KF() {}
+
+ public:
+  Eigen::MatrixXd measurement_cov_;
+  Eigen::MatrixXd measurement_noise_cov_;
 };
 using KFPtr = std::unique_ptr<KF>;
 
