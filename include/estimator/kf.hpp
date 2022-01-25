@@ -2,10 +2,11 @@
 
 #include "estimator/estimator.hpp"
 #include "fusion/predictor.hpp"
+#include "fusion/updator.hpp"
 
 namespace cg {
 
-class KF : public StateEstimator, public Predictor {
+class KF : public StateEstimator, public Predictor, public Updator {
  public:
   KF() {}
 
