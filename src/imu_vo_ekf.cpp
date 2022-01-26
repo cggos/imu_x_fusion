@@ -40,6 +40,7 @@ class EKFFusionNode {
 
     ekf_ptr_ = std::make_unique<EKF>(acc_n, gyr_n, acc_w, gyr_w);
     ekf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    ekf_ptr_->observer_ptr_ = std::make_shared<Odom6Dof>();
 
     imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&EKF::imu_callback, ekf_ptr_.get(), _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &EKFFusionNode::vo_callback, this);
@@ -91,6 +92,8 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     Tvw = Tc0cm * Tcb * Tb0bm.inverse();  // c0 --> visual frame V, b0 --> world frame W
 
+    std::dynamic_pointer_cast<Odom6Dof>(ekf_ptr_->observer_ptr_)->set_params(Tvw, Tcb);
+
     printf("[cggos %s] System initialized.\n", __FUNCTION__);
 
     return;
@@ -107,13 +110,14 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     const Eigen::Isometry3d &Twb_i = ekf_ptr_->state_ptr_i_->pose();
 
     // measurement estimation h(x_i), Twb in frame V --> Tc0cn
-    const Eigen::Isometry3d &Twb_in_V = Tvw * Twb_i * Tcb.inverse();
+    Eigen::Isometry3d Twb_in_V;
+    Twb_in_V.matrix() = ekf_ptr_->observer_ptr_->measurement_function(Twb_i.matrix());
 
     // measurement jacobian H
-    H_i = Odom6Dof::measurement_jacobi(vo_q, Twb_i, Tvw, Tcb);
+    H_i = ekf_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
 
     // for debug
-    Odom6Dof::check_jacobian(vo_q, Twb_i, Tvw, Tcb);
+    ekf_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());
 
     // residual = z - h(x_i)
     Eigen::Matrix<double, kMeasDim, 1> residual;

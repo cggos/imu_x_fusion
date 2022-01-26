@@ -2,8 +2,8 @@
 
 #include <ceres/ceres.h>
 
-#include "common/state.hpp"
 #include "common/utils.hpp"
+#include "estimator/map.hpp"
 #include "sensor/odom_6dof.hpp"
 
 namespace cg {
@@ -54,10 +54,12 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  MAPCostFunctor(const Eigen::Isometry3d& Tcb,
+  MAPCostFunctor(const MAPPtr& map_ptr,
+                 const Eigen::Isometry3d& Tcb,
                  const Eigen::Isometry3d& Tvw,
                  const Eigen::Isometry3d& TvoB,
-                 const Eigen::Matrix<double, kMeasDim, kMeasDim>& R) {
+                 const Eigen::Matrix<double, kMeasDim, kMeasDim>& R)
+      : map_ptr_(map_ptr) {
     Tcb_ = Tcb;
     Tvw_ = Tvw;
     Tvo_obs_ = TvoB;
@@ -89,8 +91,7 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
 
     residual = Lt_ * residual;
 
-    const auto& vo_q = Eigen::Quaterniond(Tvo_obs_.linear());
-    Eigen::Matrix<double, 6, 15> J = -1.0 * Odom6Dof::measurement_jacobi(vo_q, Twb_i, Tvw_, Tcb_);
+    const auto& J = -1.0 * map_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());
 
     if (jacobians != NULL) {
       if (jacobians[0] != NULL) {
@@ -111,6 +112,8 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
   Eigen::Isometry3d Tvw_;
   Eigen::Isometry3d Tvo_obs_;
   Eigen::Matrix<double, kMeasDim, kMeasDim> Lt_;
+
+  MAPPtr map_ptr_;
 };
 
 }  // namespace cg

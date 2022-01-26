@@ -57,6 +57,7 @@ class MAPFusionNode {
 
     map_ptr_ = std::make_shared<MAP>(acc_n, gyr_n, acc_w, gyr_w);
     // map_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    map_ptr_->observer_ptr_ = std::make_shared<Odom6Dof>();
 
     // init bias
     Eigen::Vector3d acc_bias(-0.0108563, 0.0796346, 0.136003);
@@ -113,6 +114,8 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     Tvw = Tc0cm * Tcb * Tb0bm.inverse();  // c0 --> visual frame V, b0 --> world frame W
 
+    std::dynamic_pointer_cast<Odom6Dof>(map_ptr_->observer_ptr_)->set_params(Tvw, Tcb);
+
     printf("[cggos %s] System initialized.\n", __FUNCTION__);
 
     return;
@@ -135,16 +138,17 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     if (i == 0) state_est = *map_ptr_->state_ptr_;
 
     // x_i
-    Eigen::Isometry3d Twb_i = state_est.pose();
+    const Eigen::Isometry3d &Twb_i = state_est.pose();
 
     // measurement estimation h(x_i), Twb in frame V --> Tc0cn
-    const Eigen::Isometry3d &Twb_in_V = Tvw * Twb_i * Tcb.inverse();
+    Eigen::Isometry3d Twb_in_V;
+    Twb_in_V.matrix() = map_ptr_->observer_ptr_->measurement_function(Twb_i.matrix());
 
     // measurement jacobian H
-    J = Odom6Dof::measurement_jacobi(vo_q, Twb_i, Tvw, Tcb);
+    J = map_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
 
     // for debug
-    Odom6Dof::check_jacobian(vo_q, Twb_i, Tvw, Tcb);
+    map_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());
 
     // residual = z - h(x_i)
     Eigen::Matrix<double, kMeasDim, 1> residual;
@@ -193,7 +197,7 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   {
     ceres::Problem problem;
     ceres::LossFunction *loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
-    ceres::CostFunction *cost_function = new MAPCostFunctor(Tcb, Tvw, Tvo, R);
+    ceres::CostFunction *cost_function = new MAPCostFunctor(map_ptr_, Tcb, Tvw, Tvo, R);
     // ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
     // problem.AddParameterBlock(vec_pose, 7, local_parameterization);
     problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_R.data());
