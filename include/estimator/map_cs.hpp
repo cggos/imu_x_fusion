@@ -2,8 +2,8 @@
 
 #include <ceres/ceres.h>
 
-#include "common/state.hpp"
 #include "common/utils.hpp"
+#include "estimator/map.hpp"
 #include "sensor/odom_6dof.hpp"
 
 namespace cg {
@@ -54,10 +54,12 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  MAPCostFunctor(const Eigen::Isometry3d& Tcb,
+  MAPCostFunctor(const MAPPtr& map_ptr,
+                 const Eigen::Isometry3d& Tcb,
                  const Eigen::Isometry3d& Tvw,
                  const Eigen::Isometry3d& TvoB,
-                 const Eigen::Matrix<double, kMeasDim, kMeasDim>& R) {
+                 const Eigen::Matrix<double, kMeasDim, kMeasDim>& R)
+      : map_ptr_(map_ptr) {
     Tcb_ = Tcb;
     Tvw_ = Tvw;
     Tvo_obs_ = TvoB;
@@ -74,24 +76,15 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
     Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_p(parameters[0]);
     Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_R(parameters[1]);
 
-    // x_i
-    Eigen::Isometry3d Twb_i;
+    Eigen::Isometry3d Twb_i;  // x_i
     Twb_i.translation() = vec_p;
     Twb_i.linear() = Utils::rot_vec_to_mat(vec_R);
 
-    // measurement estimation h(x_i), Twb in frame V --> Tc0cn
-    const Eigen::Isometry3d& Twb_in_V = Tvw_ * Twb_i * Tcb_.inverse();
-
-    // residual = z - h(x_i)
     Eigen::Map<Eigen::Matrix<double, 6, 1>> residual(residuals);
-    residual.topRows(3) = Tvo_obs_.translation() - Twb_in_V.translation();
-    residual.bottomRows(3) = State::rotation_residual(Tvo_obs_.linear(), Twb_in_V.linear());
-
+    residual = map_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo_obs_.matrix());
     residual = Lt_ * residual;
 
-    const auto& vo_q = Eigen::Quaterniond(Tvo_obs_.linear());
-    Eigen::Matrix<double, 6, 15> J = -1.0 * Odom6Dof::measurement_jacobi(vo_q, Twb_i, Tvw_, Tcb_);
-
+    const auto& J = -1.0 * map_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());
     if (jacobians != NULL) {
       if (jacobians[0] != NULL) {
         Eigen::Map<Eigen::Matrix<double, 6, 3, Eigen::RowMajor>> J0(jacobians[0]);
@@ -111,6 +104,8 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
   Eigen::Isometry3d Tvw_;
   Eigen::Isometry3d Tvo_obs_;
   Eigen::Matrix<double, kMeasDim, kMeasDim> Lt_;
+
+  MAPPtr map_ptr_;
 };
 
 }  // namespace cg

@@ -1,13 +1,15 @@
 #pragma once
 
-#include "estimator/kf.hpp"
+#include "estimator/estimator.hpp"
+#include "fusion/predictor.hpp"
+#include "fusion/updator.hpp"
 
 namespace cg {
 
-class MAP : public KF {
+class MAP : public StateEstimator, public Predictor, public Updator {
  public:
   MAP(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : KF(acc_n, gyr_n, acc_w, gyr_w) {}
+      : Predictor(state_ptr_, acc_n, gyr_n, acc_w, gyr_w) {}
 
   void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
     State last_state = *state_ptr_;
