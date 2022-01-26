@@ -1,8 +1,4 @@
-#include <eigen_conversions/eigen_msg.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
 #include <ros/ros.h>
-#include <sensor_msgs/Imu.h>
 #include <sensor_msgs/NavSatFix.h>
 
 #include <deque>
@@ -12,7 +8,6 @@
 #include "common/view.hpp"
 #include "estimator/ekf.hpp"
 #include "sensor/gnss.hpp"
-#include "sensor/imu.hpp"
 
 namespace cg {
 
@@ -30,8 +25,11 @@ class FusionNode {
     const double sigma_pv = 10;
     const double sigma_rp = 10 * kDegreeToRadian;
     const double sigma_yaw = 100 * kDegreeToRadian;
+
     ekf_ptr_ = std::make_unique<EKF>(acc_n, gyr_n, acc_w, gyr_w);
     ekf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, 0.02, 0.02);
+
+    ekf_ptr_->observer_ptr_ = std::make_shared<GNSS>();
 
     std::string topic_imu = "/imu/data";
     std::string topic_gps = "/fix";
@@ -55,9 +53,6 @@ class FusionNode {
   ros::Subscriber imu_sub_;
   ros::Subscriber gps_sub_;
 
-  Eigen::Vector3d init_lla_;
-  Eigen::Vector3d I_p_Gps_ = Eigen::Vector3d(0., 0., 0.);
-
   EKFPtr ekf_ptr_;
   Viewer viewer_;
 
@@ -80,33 +75,27 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
 
   if (!ekf_ptr_->inited_) {
     if (!ekf_ptr_->init(gps_data_ptr->timestamp)) return;
-    init_lla_ = gps_data_ptr->lla;
+
+    std::dynamic_pointer_cast<GNSS>(ekf_ptr_->observer_ptr_)->set_params(gps_data_ptr);
 
     printf("[cggos %s] System initialized.\n", __FUNCTION__);
 
     return;
   }
 
-  // convert WGS84 to ENU frame
-  Eigen::Vector3d p_G_Gps;
-  cg::lla2enu(init_lla_, gps_data_ptr->lla, &p_G_Gps);
-
-  // residual
-  Eigen::Vector3d residual = p_G_Gps - (ekf_ptr_->state_ptr_->p_wb_ + ekf_ptr_->state_ptr_->Rwb_ * I_p_Gps_);
-
   std::cout << "---------------------" << std::endl;
+
+  const Eigen::Isometry3d &Twb = ekf_ptr_->state_ptr_->pose();
+  const auto &p_G_Gps = std::dynamic_pointer_cast<GNSS>(ekf_ptr_->observer_ptr_)->g2l(gps_data_ptr);
+
+  const auto &residual = ekf_ptr_->observer_ptr_->measurement_residual(Twb.matrix(), p_G_Gps);
+
   std::cout << "res: " << residual.transpose() << std::endl;
 
-  // jacobian
-  Eigen::Matrix<double, 3, kStateDim> H;
-  H.setZero();
-  H.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
-  H.block<3, 3>(0, 6) = -ekf_ptr_->state_ptr_->Rwb_ * Utils::skew_matrix(I_p_Gps_);
-
-  // measurement covariance
-  const Eigen::Matrix3d &R = gps_data_ptr->cov;
+  const auto &H = ekf_ptr_->observer_ptr_->measurement_jacobian(Twb.matrix(), p_G_Gps);
 
   Eigen::Matrix<double, kStateDim, 3> K;
+  const Eigen::Matrix3d &R = gps_data_ptr->cov;
   ekf_ptr_->update_K(H, R, K);
   ekf_ptr_->update_P(H, R, K);
   *ekf_ptr_->state_ptr_ = *ekf_ptr_->state_ptr_ + K * residual;
@@ -120,8 +109,8 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
     viewer_.publish_gnss(*ekf_ptr_->state_ptr_);
 
     // save state p q lla
-    Eigen::Vector3d lla;
-    cg::enu2lla(init_lla_, ekf_ptr_->state_ptr_->p_wb_, &lla);  // convert ENU state to lla
+    const auto &lla = std::dynamic_pointer_cast<GNSS>(ekf_ptr_->observer_ptr_)->l2g(ekf_ptr_->state_ptr_->p_wb_);
+
     const Eigen::Quaterniond q_GI(ekf_ptr_->state_ptr_->Rwb_);
     file_state_ << std::fixed << std::setprecision(15) << ekf_ptr_->state_ptr_->timestamp << ", "
                 << ekf_ptr_->state_ptr_->p_wb_[0] << ", " << ekf_ptr_->state_ptr_->p_wb_[1] << ", "

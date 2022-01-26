@@ -9,8 +9,6 @@ namespace cg {
 
 constexpr int kMeasDim = 6;
 
-enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
-
 class Odom6Dof : public Observer {
  public:
   Odom6Dof() = default;

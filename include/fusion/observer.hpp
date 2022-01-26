@@ -4,6 +4,8 @@
 
 namespace cg {
 
+enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta X
+
 class Observer {
  public:
   Observer() = default;
