@@ -137,23 +137,13 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     if (i == 0) state_est = *map_ptr_->state_ptr_;
 
-    // x_i
-    const Eigen::Isometry3d &Twb_i = state_est.pose();
+    const Eigen::Isometry3d &Twb_i = state_est.pose();  // x_i
 
-    // measurement estimation h(x_i), Twb in frame V --> Tc0cn
-    Eigen::Isometry3d Twb_in_V;
-    Twb_in_V.matrix() = map_ptr_->observer_ptr_->measurement_function(Twb_i.matrix());
-
-    // measurement jacobian H
     J = map_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
 
-    // for debug
-    map_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());
+    map_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
-    // residual = z - h(x_i)
-    Eigen::Matrix<double, kMeasDim, 1> residual;
-    residual.topRows(3) = Tvo.translation() - Twb_in_V.translation();
-    residual.bottomRows(3) = State::rotation_residual(Tvo.linear(), Twb_in_V.linear());
+    auto residual = ekf_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
 
     std::cout << "res: " << residual.transpose() << std::endl;
 

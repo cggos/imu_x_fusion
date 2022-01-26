@@ -22,6 +22,12 @@ class Odom6Dof : public Observer {
     Tcb_ = Tcb;
   }
 
+  /**
+   * @brief measurement estimation h(x), Twb in frame V --> Tc0cn
+   *
+   * @param mat_x
+   * @return Eigen::MatrixXd
+   */
   virtual Eigen::MatrixXd measurement_function(const Eigen::MatrixXd &mat_x) {
     Eigen::Isometry3d iso_x;
     iso_x.matrix() = mat_x;
@@ -30,11 +36,32 @@ class Odom6Dof : public Observer {
   }
 
   /**
-   * @brief h(x)/delta X
+   * @brief residual = z - h(x)
    *
-   * @param vo_q
-   * @param T
-   * @return
+   * @param mat_x
+   * @param mat_z
+   * @return Eigen::MatrixXd
+   */
+  virtual Eigen::MatrixXd measurement_residual(const Eigen::MatrixXd &mat_x, const Eigen::MatrixXd &mat_z) {
+    Eigen::Isometry3d ios_x_in_z;
+    ios_x_in_z.matrix() = measurement_function(mat_x);
+
+    Eigen::Isometry3d ios_z;
+    ios_z.matrix() = mat_z;
+
+    Eigen::Matrix<double, kMeasDim, 1> residual;
+    residual.topRows(3) = ios_z.translation() - ios_x_in_z.translation();
+    residual.bottomRows(3) = State::rotation_residual(ios_z.linear(), ios_x_in_z.linear());
+
+    return residual;
+  }
+
+  /**
+   * @brief h(x)/delta X or -r(x)/delta X
+   *
+   * @param mat_x
+   * @param mat_z
+   * @return Eigen::MatrixXd
    */
   virtual Eigen::MatrixXd measurement_jacobian(const Eigen::MatrixXd &mat_x, const Eigen::MatrixXd &mat_z) {
     Eigen::Matrix<double, kMeasDim, kStateDim> H;
@@ -86,6 +113,12 @@ class Odom6Dof : public Observer {
     return H;
   }
 
+  /**
+   * @brief check jacobian
+   * 
+   * @param mat_x 
+   * @param mat_z 
+   */
   virtual void check_jacobian(const Eigen::MatrixXd &mat_x, const Eigen::MatrixXd &mat_z) {
     Eigen::Vector3d delta(0.0012, -0.00034, -0.00056);
 

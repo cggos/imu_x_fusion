@@ -106,27 +106,16 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   for (int i = 0; i < n_ite; i++) {
     if (i == 0) *ekf_ptr_->state_ptr_i_ = *ekf_ptr_->state_ptr_;
 
-    // x_i
-    const Eigen::Isometry3d &Twb_i = ekf_ptr_->state_ptr_i_->pose();
+    const Eigen::Isometry3d &Twb_i = ekf_ptr_->state_ptr_i_->pose();  // x_i
 
-    // measurement estimation h(x_i), Twb in frame V --> Tc0cn
-    Eigen::Isometry3d Twb_in_V;
-    Twb_in_V.matrix() = ekf_ptr_->observer_ptr_->measurement_function(Twb_i.matrix());
-
-    // measurement jacobian H
     H_i = ekf_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
 
-    // for debug
-    ekf_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());
+    ekf_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
-    // residual = z - h(x_i)
-    Eigen::Matrix<double, kMeasDim, 1> residual;
-    residual.topRows(3) = Tvo.translation() - Twb_in_V.translation();
-    residual.bottomRows(3) = State::rotation_residual(Tvo.linear(), Twb_in_V.linear());
+    auto residual = ekf_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
 
-    // residual -= H (x_prior - x_i)
-    Eigen::Matrix<double, kStateDim, 1> delta_x = *ekf_ptr_->state_ptr_ - *ekf_ptr_->state_ptr_i_;
-    residual -= H_i * delta_x;
+    // for IEKF, residual -= H (x_prior - x_i)
+    residual -= H_i * (*ekf_ptr_->state_ptr_ - *ekf_ptr_->state_ptr_i_);
 
     std::cout << "res: " << residual.transpose() << std::endl;
 

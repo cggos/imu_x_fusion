@@ -76,23 +76,15 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
     Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_p(parameters[0]);
     Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_R(parameters[1]);
 
-    // x_i
-    Eigen::Isometry3d Twb_i;
+    Eigen::Isometry3d Twb_i;  // x_i
     Twb_i.translation() = vec_p;
     Twb_i.linear() = Utils::rot_vec_to_mat(vec_R);
 
-    // measurement estimation h(x_i), Twb in frame V --> Tc0cn
-    const Eigen::Isometry3d& Twb_in_V = Tvw_ * Twb_i * Tcb_.inverse();
-
-    // residual = z - h(x_i)
     Eigen::Map<Eigen::Matrix<double, 6, 1>> residual(residuals);
-    residual.topRows(3) = Tvo_obs_.translation() - Twb_in_V.translation();
-    residual.bottomRows(3) = State::rotation_residual(Tvo_obs_.linear(), Twb_in_V.linear());
-
+    residual = map_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo_obs_.matrix());
     residual = Lt_ * residual;
 
     const auto& J = -1.0 * map_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());
-
     if (jacobians != NULL) {
       if (jacobians[0] != NULL) {
         Eigen::Map<Eigen::Matrix<double, 6, 3, Eigen::RowMajor>> J0(jacobians[0]);
