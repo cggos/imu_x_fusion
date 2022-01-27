@@ -59,19 +59,8 @@ class UKFFusionNode {
 };
 
 void UKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg) {
-  Eigen::Vector3d vo_p;
-  Eigen::Quaterniond vo_q;
-  vo_p.x() = vo_msg->pose.pose.position.x;
-  vo_p.y() = vo_msg->pose.pose.position.y;
-  vo_p.z() = vo_msg->pose.pose.position.z;
-  vo_q.x() = vo_msg->pose.pose.orientation.x;
-  vo_q.y() = vo_msg->pose.pose.orientation.y;
-  vo_q.z() = vo_msg->pose.pose.orientation.z;
-  vo_q.w() = vo_msg->pose.pose.orientation.w;
-
   Eigen::Isometry3d Tvo;  // VO in frame V --> Tc0cn
-  Tvo.linear() = vo_q.toRotationMatrix();
-  Tvo.translation() = vo_p;
+  tf::poseMsgToEigen(vo_msg->pose.pose, Tvo);
 
   ukf_ptr_->measurement_noise_cov_ =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
