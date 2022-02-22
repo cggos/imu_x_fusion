@@ -13,8 +13,8 @@
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
-#define WITH_DIY 0    // User Defined
-#define WITH_CS 1     // with Ceres-Solver
+#define WITH_DIY 1    // User Defined
+#define WITH_CS 0     // with Ceres-Solver
 #define WITH_G2O 0    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
@@ -114,12 +114,13 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 #if WITH_DIY
   // G-N iteration update, same with EKF when n_ite = 1
   int n_ite = 50;
-  double cost = 0, lastCost = 0;
+  double lambda = 1.0;
+  double cost = 0, last_cost = 0;
   Eigen::Matrix<double, kStateDim, 1> dx;
   Eigen::Matrix<double, kStateDim, 1> b;
   Eigen::Matrix<double, kMeasDim, kStateDim> J;
   Eigen::Matrix<double, kStateDim, kStateDim> H;
-  const Eigen::Matrix<double, kMeasDim, kMeasDim> &InfoMat = R.inverse();
+  const auto &InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
   for (int i = 0; i < n_ite; i++) {
     b = Eigen::Matrix<double, kStateDim, 1>::Zero();
     H = Eigen::Matrix<double, kStateDim, kStateDim>::Zero();
@@ -132,39 +133,33 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     map_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
-    auto residual = ekf_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
+    auto residual = map_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
 
     std::cout << "res: " << residual.transpose() << std::endl;
 
     cost = residual.squaredNorm();
 
-    std::cout << "iteration " << i << " cost=" << std::cout.precision(12) << cost << std::endl;
-    if (i > 0 && cost >= lastCost) {  // cost increase, update is not good
-      std::cout << "cost: " << cost << ", last cost: " << lastCost << std::endl;
-      break;
+    std::cout << "iteration " << i << " cost: " << std::cout.precision(12) << cost << ", last cost: " << last_cost
+              << std::endl;
+
+    if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
+      lambda *= 10.0f;
+    } else {
+      lambda /= 10.0f;
     }
 
-    H.noalias() += J.transpose() * InfoMat * J;
+    H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, kStateDim, kStateDim>::Identity() * lambda;
     b.noalias() += J.transpose() * InfoMat * residual;
 
-    // {
-    //   Eigen::JacobiSVD<Eigen::MatrixXd> svd(H, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    //   Eigen::MatrixXd singularValues;
-    //   singularValues.resize(svd.singularValues().rows(), 1);
-    //   singularValues = svd.singularValues();
-    //   double cond = singularValues(0, 0) / singularValues(singularValues.rows() - 1, 0);
-    //   double max_cond_number = 1e5;
-    //   std::cout << "cond num of P: " << std::abs(cond) << std::endl;
-    //   if (std::abs(cond) > max_cond_number) {
-    //     H.noalias() += Eigen::Matrix<double, kStateDim, kStateDim>::Identity();
-    //   }
-    // }
+    double cond_num = Utils::condition_number(H);
+    std::cout << "cond num of H: " << cond_num << std::endl;
+    // if (cond_num > 1e5) H = H.diagonal().asDiagonal();
 
     dx = H.ldlt().solve(b);
 
     state_est = state_est + dx;
 
-    lastCost = cost;
+    last_cost = cost;
   }
 #endif
 
