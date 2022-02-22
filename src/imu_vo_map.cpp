@@ -13,8 +13,8 @@
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
-#define WITH_DIY 0    // User Defined
-#define WITH_CS 1     // with Ceres-Solver
+#define WITH_DIY 1    // User Defined
+#define WITH_CS 0     // with Ceres-Solver
 #define WITH_G2O 0    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
@@ -132,7 +132,7 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     map_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
-    auto residual = ekf_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
+    auto residual = map_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
 
     std::cout << "res: " << residual.transpose() << std::endl;
 
