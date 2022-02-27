@@ -91,7 +91,7 @@ class IMU {
         vec_na = Eigen::Vector3d(acc_noise_, acc_noise_, acc_noise_);
         vec_ng = Eigen::Vector3d(gyr_noise_, gyr_noise_, gyr_noise_);
         vec_wa = Eigen::Vector3d(acc_bias_noise_, acc_bias_noise_, acc_bias_noise_);
-        vec_wg = Eigen::Vector3d(acc_bias_noise_, acc_bias_noise_, acc_bias_noise_);
+        vec_wg = Eigen::Vector3d(gyr_bias_noise_, gyr_bias_noise_, gyr_bias_noise_);
       } else {
         vec_na = vec_noise.segment<3>(0);
         vec_ng = vec_noise.segment<3>(3);
@@ -100,8 +100,8 @@ class IMU {
       }
     }
 
-    const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias + vec_wa;
-    const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias + vec_wg;
+    const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias - vec_na;
+    const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias - vec_ng;
 
     const Eigen::Vector3d acc_nominal = last_state.Rwb_ * acc_unbias + Eigen::Vector3d(0, 0, -kG);
     const auto &dR = State::delta_rot_mat(gyr_unbias * dt);
@@ -109,8 +109,8 @@ class IMU {
     state.p_wb_ = last_state.p_wb_ + last_state.v_wb_ * dt + 0.5 * acc_nominal * dt2;
     state.v_wb_ = last_state.v_wb_ + acc_nominal * dt;
     state.Rwb_ = State::rotation_update(last_state.Rwb_, dR);
-    state.acc_bias = last_state.acc_bias + vec_na * dt;
-    state.gyr_bias = last_state.gyr_bias + vec_ng * dt;
+    state.acc_bias = last_state.acc_bias + vec_wa * dt;
+    state.gyr_bias = last_state.gyr_bias + vec_wg * dt;
   }
 
   /**
