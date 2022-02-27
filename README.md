@@ -4,10 +4,10 @@
   - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cggos.github.io/sensorfusion-imu-gnss.html)
 
 * IMU + 6DoF Odom (Stereo Visual Odometry)
-  - [x] ESKF: [IMU and VO Loose Fusion based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_VO_Loose_Fusion_based_on_ESKF)
+  - [x] ESKF: [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_6_DoF_Odometry_Stereo_Visual_Odometry_Loosely-Coupled_Fusion_Localization_based_on_ESKF)
   - [x] IEKF: https://cggos.github.io/map-mle-ols-gn-iekf-ekf.html#iekf
-  - [x] UKF(including JUKF and SVD-UKF, Doc: comming soon)
-  - [x] MAP(User-defined G-N, Ceres-Solver, TODO: fix poor result)
+  - [x] UKF(including JUKF and SVD-UKF): [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on UKF](https://www.researchgate.net/publication/358891263_IMU_and_6_DoF_Odometry_Stereo_Visual_Odometry_Loosely-Coupled_Fusion_Localization_based_on_UKF)
+  - [x] MAP(User-defined L-M, Ceres-Solver)
 
 -----
 
