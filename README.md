@@ -158,3 +158,7 @@ roslaunch mynt_eye_ros_wrapper mynteye.launch
 
 * Debug
   - [x] Check Measurement Jacobian Matrix
+  
+## Community
+
+* Welcom to join [the Discord channel #multi-sensor-fusion](https://discord.gg/2RV2vKmdpa)
