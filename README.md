@@ -1,7 +1,7 @@
 # IMU + X Loosely-Coupled Fusion Localization
 
 * IMU + GPS
-  - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cggos.github.io/sensorfusion-imu-gnss.html)
+  - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://spatial-ai.net/sensorfusion-imu-gnss.html)
 
 * IMU + 6DoF Odom (Stereo Visual Odometry)
   - [x] ESKF: [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_6_DoF_Odometry_Stereo_Visual_Odometry_Loosely-Coupled_Fusion_Localization_based_on_ESKF)
