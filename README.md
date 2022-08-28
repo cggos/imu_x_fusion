@@ -1,17 +1,57 @@
 # IMU + X Loosely-Coupled Fusion Localization
 
 * IMU + GPS
-  - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://spatial-ai.net/sensorfusion-imu-gnss.html)
+
+  - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cgabc.xyz/posts/4e9a780e/)
 
 * IMU + 6DoF Odom (Stereo Visual Odometry)
-  - [x] ESKF: [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on ESKF (Presentation)](https://www.researchgate.net/publication/353330937_IMU_and_6_DoF_Odometry_Stereo_Visual_Odometry_Loosely-Coupled_Fusion_Localization_based_on_ESKF)
-  - [x] IEKF: https://cggos.github.io/map-mle-ols-gn-iekf-ekf.html#iekf
-  - [x] UKF(including JUKF and SVD-UKF): [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on UKF](https://www.researchgate.net/publication/358891263_IMU_and_6_DoF_Odometry_Stereo_Visual_Odometry_Loosely-Coupled_Fusion_Localization_based_on_UKF)
+
+  - [x] ESKF: [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on ESKF (Presentation)](http://dx.doi.org/10.13140/RG.2.2.28797.69602)
+
+  - [x] IEKF: https://cgabc.xyz/posts/784a80cb/#iekf
+
+  - [x] UKF(including JUKF and SVD-UKF): [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on UKF](http://dx.doi.org/10.13140/RG.2.2.30602.54727)
+
   - [x] MAP(User-defined L-M, Ceres-Solver)
 
 -----
 
-[TOC]
+## Features
+
+* Sensors
+  - [x] IMU
+    - [x] Numerical Integration (TODO: RK4) 
+    - [ ] Pre-Integration
+  - [ ] Wheel Odometer
+  - [ ] Manometer
+  - [x] GPS
+  - [x] 6DoF Odom (Stereo Visual Odometry)
+  - [ ] LiDAR
+  - [ ] Multi-modal data
+
+* State Estimation
+  - [x] EKF
+    - [x] ESKF
+    - [x] IEKF
+  - [x] UKF
+    - [x] JUKF
+    - [x] SVD-UKF
+  - [ ] Particle Filter
+  - [ ] MAP
+    - [x] User-defined G-N
+    - [x] Ceres-Solver
+    - [ ] G2O
+    - [ ] GTSAM
+
+* Local / Global Angular Error (Rotation Perturbation)
+  - [x] Local Angular Error (OK)
+  - [x] Global Angular Error (TODO: why Poor)
+  ```cpp
+  enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
+  ```
+
+* Debug
+  - [x] Check Measurement Jacobian Matrix
 
 ## Requirements
 
@@ -122,42 +162,20 @@ roslaunch imu_x_fusion imu_vo_fusion_mynteye.launch
 roslaunch mynt_eye_ros_wrapper mynteye.launch
 ```
 
-## Features
+## Docs
 
-* Sensors
-  - [x] IMU
-    - [x] Numerical Integration (TODO: RK4) 
-    - [ ] Pre-Integration
-  - [ ] Wheel Odometer
-  - [ ] Manometer
-  - [x] GPS
-  - [x] 6DoF Odom (Stereo Visual Odometry)
-  - [ ] LiDAR
-  - [ ] Multi-modal data
-
-* State Estimation
-  - [x] EKF
-    - [x] ESKF
-    - [x] IEKF
-  - [x] UKF
-    - [x] JUKF
-    - [x] SVD-UKF
-  - [ ] Particle Filter
-  - [ ] MAP
-    - [x] User-defined G-N
-    - [x] Ceres-Solver
-    - [ ] G2O
-    - [ ] GTSAM
-
-* Local / Global Angular Error (Rotation Perturbation)
-  - [x] Local Angular Error (OK)
-  - [x] Global Angular Error (TODO: why Poor)
-  ```cpp
-  enum ANGULAR_ERROR { LOCAL_ANGULAR_ERROR, GLOBAL_ANGULAR_ERROR };
+* Requirements
+  ```sh
+  sudo apt install graphviz
+  sudo apt install doxygen
   ```
 
-* Debug
-  - [x] Check Measurement Jacobian Matrix
+* Generate
+  ```sh
+  # output in html and latex dir
+  doxygen Doxygen.config
+  ```
+
   
 ## Community
 
