@@ -57,7 +57,7 @@ class MAPFusionNode {
 
     map_ptr_ = std::make_shared<MAP>(acc_n, gyr_n, acc_w, gyr_w);
     // map_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
-    map_ptr_->observer_ptr_ = std::make_shared<Odom6Dof>();
+    factor_odom6dof_ptr_ = std::make_shared<Odom6Dof>();
 
     // init bias
     Eigen::Vector3d acc_bias(-0.0108563, 0.0796346, 0.136003);
@@ -82,6 +82,8 @@ class MAPFusionNode {
   Eigen::Isometry3d Tvw;
 
   MAPPtr map_ptr_;
+  FactorPtr factor_odom6dof_ptr_;
+
   Viewer viewer_;
 };
 
@@ -103,7 +105,7 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     Tvw = Tc0cm * Tcb * Tb0bm.inverse();  // c0 --> visual frame V, b0 --> world frame W
 
-    std::dynamic_pointer_cast<Odom6Dof>(map_ptr_->observer_ptr_)->set_params(Tvw, Tcb);
+    std::dynamic_pointer_cast<Odom6Dof>(factor_odom6dof_ptr_)->set_params(Tvw, Tcb);
 
     printf("[cggos %s] System initialized.\n", __FUNCTION__);
 
@@ -129,11 +131,11 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     const Eigen::Isometry3d &Twb_i = state_est.pose();  // x_i
 
-    J = map_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
+    J = factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
 
-    map_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
+    factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
-    auto residual = map_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
+    auto residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
 
     std::cout << "res: " << residual.transpose() << std::endl;
 
