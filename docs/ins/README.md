@@ -2,6 +2,8 @@
 
 * Blog (CGABC): https://cgabc.xyz/categories/INS/
 
+- [Local Gravity Calculator](https://www.sensorsone.com/local-gravity-calculator/)
+
 ---
 
 An **Inertial Navigation System (INS)** is a navigation device that uses a computer, 

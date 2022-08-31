@@ -1,4 +1,4 @@
-site_name: MSF
+site_name: Multi-Sensor Fusion
 site_author: Gavin Gao
 site_url: https://msf.cgabc.xyz/
 site_description: Multiple Sensor Fusion
@@ -93,7 +93,10 @@ nav:
 
   - Sensor:
     - Overview: sensor/README.md
-    - Radar: sensor/radar.md
+    - Types:
+      - Radar: sensor/type/radar.md
+    - Calibration:
+      - Overview: sensor/calib/README.md
 
   - INS:
     - Overview: ins/README.md
@@ -102,7 +105,8 @@ nav:
   
   - GNSS:
     - Overview: gnss/README.md
-
-  - Geomagnetics: geomagnetics.md
+    - RTK: gnss/rtk.md
+    - Geomagnetics: gnss/geomagnetics.md
+    - App: gnss/app.md
 
   - GIS: gis.md
