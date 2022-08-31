@@ -1,0 +1,108 @@
+site_name: MSF
+site_author: Gavin Gao
+site_url: https://msf.cgabc.xyz/
+site_description: Multiple Sensor Fusion
+
+repo_url: https://github.com/cggos/imu_x_fusion
+repo_name: cggos/imu_x_fusion
+
+theme: 
+  name: material # readthedocs material
+  # logo: material/library
+  favicon: images/favicon.png
+  icon:
+    repo: fontawesome/brands/git-alt
+  nav_style: light
+  language: 'zh'
+  # palette:
+  #   primary: 'light blue'
+  #   accent: 'indigo' 
+  feature:
+    tabs: true
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    # - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.prune
+    - navigation.indexes
+    - navigation.top
+    - toc.follow
+    # - toc.integrate
+    - content.code.annotate
+
+plugins:
+  - search
+  # - social
+  - tags
+
+markdown_extensions:
+  - abbr
+  - meta
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - toc:
+      permalink: true # "#"
+      toc_depth: 5
+      separator: "_"
+      slugify: !!python/name:pymdownx.slugs.uslugify_cased
+  - codehilite:
+      guess_lang: true
+      linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.arithmatex
+  - pymdownx.critic
+  - pymdownx.details
+  - pymdownx.magiclink
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde        
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.highlight:
+      auto_title: true
+      anchor_linenums: true
+      linenums_style: pymdownx-inline
+  - pymdownx.tabbed:
+      alternate_style: true       
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+      # emoji_generator: !!python/name:pymdownx.emoji.to_png
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/cggos
+      name: cggos on GitHub
+    - icon: fontawesome/brands/twitter 
+      link: https://twitter.com/CGiABC
+      name: CGABC on Twitter
+        
+nav:
+  - Home: 'index.md'
+
+  - Sensor:
+    - Overview: sensor/README.md
+    - Radar: sensor/radar.md
+
+  - INS:
+    - Overview: ins/README.md
+    - IMU: ins/imu.md
+    - SINS & AHRS: ins/sins_ahrs.md
+  
+  - GNSS:
+    - Overview: gnss/README.md
+
+  - Geomagnetics: geomagnetics.md
+
+  - GIS: gis.md
