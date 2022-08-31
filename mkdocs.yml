@@ -97,6 +97,7 @@ nav:
 
   - INS:
     - Overview: ins/README.md
+    - IMU: ins/imu.md
     - SINS & AHRS: ins/sins_ahrs.md
   
   - GNSS:
