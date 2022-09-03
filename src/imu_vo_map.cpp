@@ -13,8 +13,8 @@
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
-#define WITH_DIY 1    // User Defined
-#define WITH_CS 0     // with Ceres-Solver
+#define WITH_DIY 0    // User Defined
+#define WITH_CS 1     // with Ceres-Solver
 #define WITH_G2O 0    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
@@ -172,8 +172,10 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   Eigen::Matrix<double, 3, 1> vec_R = state_vec.segment<3>(6);
   {
     ceres::Problem problem;
-    ceres::LossFunction *loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
-    ceres::CostFunction *cost_function = new MAPCostFunctor(map_ptr_, Tcb, Tvw, Tvo, R);
+    ceres::LossFunction *loss_function;
+    // loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
+    loss_function = nullptr;
+    ceres::CostFunction *cost_function = new MAPCostFunctor(factor_odom6dof_ptr_, Tcb, Tvw, Tvo, R);
     // ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
     // problem.AddParameterBlock(vec_pose, 7, local_parameterization);
     problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_R.data());
