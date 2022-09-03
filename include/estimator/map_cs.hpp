@@ -84,6 +84,7 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
     residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo_obs_.matrix());
     residual = Lt_ * residual;
 
+    // J = r(x)/delta X
     const auto& J = -1.0 * factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());
     if (jacobians != NULL) {
       if (jacobians[0] != NULL) {

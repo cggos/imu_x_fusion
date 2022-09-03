@@ -41,15 +41,15 @@ class Odom6Dof : public Observer {
    * @return Eigen::MatrixXd
    */
   virtual Eigen::MatrixXd measurement_residual(const Eigen::MatrixXd &mat_x, const Eigen::MatrixXd &mat_z) {
-    Eigen::Isometry3d ios_x_in_z;
-    ios_x_in_z.matrix() = measurement_function(mat_x);
+    Eigen::Isometry3d iso_x_in_z;
+    iso_x_in_z.matrix() = measurement_function(mat_x);
 
-    Eigen::Isometry3d ios_z;
-    ios_z.matrix() = mat_z;
+    Eigen::Isometry3d iso_z;
+    iso_z.matrix() = mat_z;
 
     Eigen::Matrix<double, kMeasDim, 1> residual;
-    residual.topRows(3) = ios_z.translation() - ios_x_in_z.translation();
-    residual.bottomRows(3) = State::rotation_residual(ios_z.linear(), ios_x_in_z.linear());
+    residual.topRows(3) = iso_z.translation() - iso_x_in_z.translation();
+    residual.bottomRows(3) = State::rotation_residual(iso_z.linear(), iso_x_in_z.linear());
 
     return residual;
   }

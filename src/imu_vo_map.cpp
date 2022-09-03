@@ -13,8 +13,8 @@
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
-#define WITH_DIY 0    // User Defined
-#define WITH_CS 1     // with Ceres-Solver
+#define WITH_DIY 1    // User Defined
+#define WITH_CS 0     // with Ceres-Solver
 #define WITH_G2O 0    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
@@ -144,11 +144,11 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     std::cout << "iteration " << i << " cost: " << std::cout.precision(12) << cost << ", last cost: " << last_cost
               << std::endl;
 
-    if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
-      lambda *= 10.0f;
-    } else {
-      lambda /= 10.0f;
-    }
+    // if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
+    //   lambda *= 10.0f;
+    // } else {
+    //   lambda /= 10.0f;
+    // }
 
     H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, kStateDim, kStateDim>::Identity() * lambda;
     b.noalias() += J.transpose() * InfoMat * residual;
