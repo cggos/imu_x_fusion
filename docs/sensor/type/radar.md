@@ -12,7 +12,7 @@
 ### rplidar
 
 <p align="center">
-  <img src="../img/sensor/rplidar.jpg">
+  <img src="../../img/sensor/rplidar.jpg">
 </p>
 
 * [rplidar (ROS Wiki)](http://wiki.ros.org/rplidar)
@@ -25,5 +25,5 @@ roslaunch rplidar_ros view_rplidar.launch
 ```
 
 <p align="center">
-  <img src="../img/sensor/view_rplidar.jpg">
+  <img src="../../img/sensor/view_rplidar.jpg">
 </p>

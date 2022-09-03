@@ -1,6 +1,8 @@
 <launch>
     <arg name="rviz" default="true"/>
     <arg name="est" default="ekf"/>
+    <!-- for docker -->
+    <arg name="bag" default="false"/>
 
     <arg name="calibration_file" default="$(find imu_x_fusion)/config/camchain-imucam-euroc.yaml" />
 
@@ -39,4 +41,10 @@
         args="-d $(find imu_x_fusion)/rviz/imu_vo_fusion.rviz" required="true">
       </node>
     </group>
+
+    <!-- for docker -->
+    <group if="$(arg bag)">
+        <node pkg="rosbag" type="play" name="rosbag" args="-s 0 /root/dataset/orbslam2_v101easy.bag" required="true"/>
+    </group>
+
 </launch>

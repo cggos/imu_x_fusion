@@ -85,7 +85,7 @@ catkin_make -j4 # error happened when using the default cmake 3.5.1 on Ubuntu 16
 catkin build -j4
 ```
 
-## Run
+## Run on Host
 
 ### IMU + GNSS
 
@@ -147,7 +147,7 @@ results(Green path: estimated pose; Red path: pose of VO):
 
 ##### Use the recorded bag file directly
 
-Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/wYejg2zlD)
+Download [orbslam2_v101easy.bag](http://gofile.me/5lGth/4XBQVLhAn)
 
 ```sh
 rosbag play orbslam2_v101easy.bag
@@ -160,6 +160,18 @@ rosbag play orbslam2_v101easy.bag
 roslaunch imu_x_fusion imu_vo_fusion_mynteye.launch
 
 roslaunch mynt_eye_ros_wrapper mynteye.launch
+```
+
+## Run with Docker
+
+```sh
+# pull from DockerHub
+sudo docker pull cggos/ubuntu-ros-slam:bionic-melodic
+
+# run, e.g.: imu_vo_fusion
+./scripts/run_docker.sh
+
+# modify the script for running others
 ```
 
 ## Docs
