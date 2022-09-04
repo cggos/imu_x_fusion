@@ -13,8 +13,8 @@
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
-#define WITH_DIY 1    // User Defined
-#define WITH_CS 0     // with Ceres-Solver
+#define WITH_DIY 0    // User Defined
+#define WITH_CS 1     // with Ceres-Solver
 #define WITH_G2O 0    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
@@ -159,17 +159,17 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
 #if WITH_CS
   auto vec_pq = state_est.vec_pq();
-  auto vec_vb = state_est.vec_vb();
+  auto vec_p = vec_pq.head(3);
+  auto vec_q = vec_pq.tail(4);
   {
     ceres::Problem problem;
     ceres::LossFunction *loss_function = nullptr;
     // loss_function = new ceres::HuberLoss(1.0);
-    // loss_function = new ceres::CauchyLoss(1.0);
+    loss_function = new ceres::CauchyLoss(1.0);
     ceres::CostFunction *cost_function = new MAPCostFunctor(factor_odom6dof_ptr_, Tcb, Tvw, Tvo, R);
-    ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-    problem.AddParameterBlock(vec_pq.data(), 7, local_parameterization);
-    problem.AddParameterBlock(vec_vb.data(), 9);
-    problem.AddResidualBlock(cost_function, loss_function, vec_pq.data());
+    problem.AddParameterBlock(vec_p.data(), 3);
+    problem.AddParameterBlock(vec_q.data(), 4, new QuatLocalParameterization());  // ceres::EigenQuaternionManifold()
+    problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_q.data());
 
     ceres::Solver::Options options;
     // options.dynamic_sparsity = true;
@@ -184,8 +184,8 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";
   }
+  vec_pq << vec_p, vec_q;
   state_est.set_vec_pq(vec_pq);
-  state_est.set_vec_vb(vec_vb);
 #endif
 
 #if WITH_G2O

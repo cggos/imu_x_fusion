@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ceres/ceres.h>
+#include <ceres/rotation.h>
 
 #include "common/utils.hpp"
 #include "estimator/map.hpp"
@@ -8,49 +9,48 @@
 
 namespace cg {
 
-class PoseLocalParameterization : public ceres::LocalParameterization {
+class QuatLocalParameterization : public ceres::LocalParameterization {
   template <typename Derived>
   inline static Eigen::Quaternion<typename Derived::Scalar> quat_from_delta(const Eigen::MatrixBase<Derived>& theta) {
     typedef typename Derived::Scalar Scalar_t;
     Eigen::Quaternion<Scalar_t> dq;
     Eigen::Matrix<Scalar_t, 3, 1> half_theta = theta;
     half_theta /= static_cast<Scalar_t>(2.0);
-    dq.w() = static_cast<Scalar_t>(1.0);
-    dq.x() = half_theta.x();
-    dq.y() = half_theta.y();
-    dq.z() = half_theta.z();
+
+    dq.vec() = half_theta;
+    // dq.w() = static_cast<Scalar_t>(1.0);
+
+    double dq_square_norm = half_theta.squaredNorm();
+    if (dq_square_norm <= 1)
+      dq.w() = static_cast<Scalar_t>(std::sqrt(1 - dq_square_norm));
+    else {
+      dq.w() = static_cast<Scalar_t>(1.0);
+      dq.normalize();
+    }
+
     return dq;
   }
 
   virtual bool Plus(const double* x, const double* delta, double* x_plus_delta) const {
-    Eigen::Map<const Eigen::Vector3d> _p(x);
-    Eigen::Map<const Eigen::Quaterniond> _q(x + 3);
-
-    Eigen::Map<const Eigen::Vector3d> dp(delta);
-
-    Eigen::Quaterniond dq = quat_from_delta(Eigen::Map<const Eigen::Vector3d>(delta + 3));
-
-    Eigen::Map<Eigen::Vector3d> p(x_plus_delta);
-    Eigen::Map<Eigen::Quaterniond> q(x_plus_delta + 3);
-
-    p = _p + dp;
+    Eigen::Map<const Eigen::Quaterniond> _q(x);
+    Eigen::Quaterniond dq = quat_from_delta(Eigen::Map<const Eigen::Vector3d>(delta));
+    Eigen::Map<Eigen::Quaterniond> q(x_plus_delta);
     q = (_q * dq).normalized();
-
     return true;
   }
 
   virtual bool ComputeJacobian(const double* x, double* jacobian) const {
-    Eigen::Map<Eigen::Matrix<double, 7, 6, Eigen::RowMajor>> j(jacobian);
-    j.topRows<6>().setIdentity();
+    Eigen::Map<Eigen::Matrix<double, 4, 3, Eigen::RowMajor>> j(jacobian);
+    j.topRows<3>().setIdentity();
     j.bottomRows<1>().setZero();
     return true;
   }
 
-  virtual int GlobalSize() const { return 7; };
-  virtual int LocalSize() const { return 6; };
+  virtual int GlobalSize() const { return 4; };
+  virtual int LocalSize() const { return 3; };
 };
 
-class MAPCostFunctor : public ceres::SizedCostFunction<6, 7> {
+class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 4> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -74,11 +74,12 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 7> {
   virtual ~MAPCostFunctor() {}
 
   virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {
-    Eigen::Map<const Eigen::Matrix<double, 7, 1>> vec_pq(parameters[0]);
+    Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_p(parameters[0]);
+    Eigen::Map<const Eigen::Matrix<double, 4, 1>> vec_q(parameters[1]);
 
     Eigen::Isometry3d Twb_i;  // x_i
-    Twb_i.translation() = vec_pq.head(3);
-    Twb_i.linear() = Eigen::Quaterniond(vec_pq.tail(4).data()).toRotationMatrix();
+    Twb_i.translation() = vec_p;
+    Twb_i.linear() = Eigen::Quaterniond(vec_q.data()).toRotationMatrix();
 
     Eigen::Map<Eigen::Matrix<double, 6, 1>> residual(residuals);
     residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo_obs_.matrix());
@@ -88,18 +89,17 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 7> {
     const auto& J = -1.0 * factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());
     if (jacobians != nullptr) {
       if (jacobians[0] != nullptr) {
-        Eigen::Map<Eigen::Matrix<double, 6, 7, Eigen::RowMajor>> J0(jacobians[0]);
-
-        Eigen::Matrix<double, 6, 6> Jpose;
-        Jpose.leftCols(3) = J.block<6, 3>(0, 0);
-        Jpose.rightCols(3) = J.block<6, 3>(0, 6);
-
-        J0.leftCols(6) = Lt_ * Jpose;
-        J0.rightCols(1).setZero();
+        Eigen::Map<Eigen::Matrix<double, 6, 3, Eigen::RowMajor>> J0(jacobians[0]);
+        J0 = Lt_ * J.block<6, 3>(0, 0);
+      }
+      if (jacobians[1] != nullptr) {
+        Eigen::Map<Eigen::Matrix<double, 6, 4, Eigen::RowMajor>> J1(jacobians[1]);
+        J1.leftCols(3) = Lt_ * J.block<6, 3>(0, 6);
+        J1.rightCols(1).setZero();
       }
     }
 
-    factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());  // for debug
+    // factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());  // for debug
 
     return true;
   }
