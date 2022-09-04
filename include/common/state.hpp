@@ -65,6 +65,16 @@ class State {
     return Twb;
   }
 
+  void set_pose(const Eigen::Isometry3d &pose) {
+    Rwb_ = pose.linear();
+    p_wb_ = pose.translation();
+  }
+
+  static void update_pose(Eigen::Isometry3d &pose, const Eigen::Matrix<double, 6, 1> &delta_pose) {
+    pose.translation().noalias() += delta_pose.head(3);
+    pose.linear() = rotation_update(pose.rotation(), delta_rot_mat(delta_pose.tail(3)));
+  }
+
   const Eigen::Matrix<double, 7, 1> vec_pq() const {
     Eigen::Matrix<double, 7, 1> vec;
 

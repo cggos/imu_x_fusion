@@ -8,22 +8,22 @@
 #include "common/utils.hpp"
 #include "common/view.hpp"
 #include "estimator/map.hpp"
-#include "estimator/map_cs.hpp"
 #include "sensor/imu.hpp"
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
 #define WITH_DIY 0    // User Defined
-#define WITH_CS 1     // with Ceres-Solver
-#define WITH_G2O 0    // with G2O, TODO
+#define WITH_CS 0     // with Ceres-Solver
+#define WITH_G2O 1    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
-#if WITH_GTSAM
-#include <gtsam/nonlinear/GaussNewtonOptimizer.h>
-#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
-#include <gtsam/slam/BetweenFactor.h>
-#include <gtsam/slam/PriorFactor.h>
-#include <gtsam/slam/dataset.h>
+#if WITH_DIY
+#elif WITH_CS
+#include "estimator/map_cs.hpp"
+#elif WITH_G2O
+#include "estimator/map_g2o.hpp"
+#elif WITH_GTSAM
+#include "estimator/map_gtsam.hpp"
 #endif
 
 namespace cg {
@@ -189,6 +189,37 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 #endif
 
 #if WITH_G2O
+  typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 6>> Block;  // 每个误差项 优化变量维度，误差值维度
+  Block::LinearSolverType *linearSolver = new g2o::LinearSolverDense<Block::PoseMatrixType>();  // 线性方程求解器
+  Block *solver_ptr = new Block(std::unique_ptr<Block::LinearSolverType>(linearSolver));        // 矩阵块求解器
+
+  g2o::OptimizationAlgorithm *solver = nullptr;
+  solver = new g2o::OptimizationAlgorithmGaussNewton(std::unique_ptr<Block>(solver_ptr));
+  // solver = new g2o::OptimizationAlgorithmLevenberg(std::unique_ptr<Block>(solver_ptr));
+  // solver = new g2o::OptimizationAlgorithmDogleg(std::unique_ptr<Block>(solver_ptr));
+
+  g2o::SparseOptimizer optimizer;
+  optimizer.setAlgorithm(solver);
+  optimizer.setVerbose(true);
+
+  // g2o::VertexSE3 *v_pose = new g2o::VertexSE3();
+  VertexPose *v_pose = new VertexPose();
+  v_pose->setEstimate(state_est.pose());
+  v_pose->setId(0);
+  v_pose->setFixed(false);
+  optimizer.addVertex(v_pose);
+
+  EdgePose *e_pose = new EdgePose(factor_odom6dof_ptr_);
+  e_pose->setId(0);
+  e_pose->setVertex(0, v_pose);
+  e_pose->setMeasurement(Tvo);
+  optimizer.addEdge(e_pose);
+
+  optimizer.initializeOptimization();
+  optimizer.optimize(30);
+
+  // g2o::VertexSE3 *pose_est = dynamic_cast<g2o::VertexSE3 *>(optimizer.vertex(0));
+  state_est.set_pose(v_pose->estimate());
 #endif
 
 #if WITH_GTSAM
