@@ -12,12 +12,13 @@
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
-#define WITH_DIY 0    // User Defined
+#define WITH_DIY 1    // User Defined
 #define WITH_CS 0     // with Ceres-Solver
-#define WITH_G2O 1    // with G2O, TODO
+#define WITH_G2O 0    // with G2O, TODO
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
 #if WITH_DIY
+enum OptType { kGN, kLM };
 #elif WITH_CS
 #include "estimator/map_cs.hpp"
 #elif WITH_G2O
@@ -114,38 +115,46 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
   State &state_est = *map_ptr_->state_ptr_;
 #if WITH_DIY
+  OptType opt_type = OptType::kLM;
+
+  Eigen::Isometry3d Twb_i = state_est.pose();
+  
   // G-N iteration update, same with EKF when n_ite = 1
   int n_ite = 50;
-  double lambda = 1.0;
+  double lambda = opt_type == OptType::kLM ? 1.0 : 0.0;
   double cost = 0, last_cost = 0;
-  Eigen::Matrix<double, kStateDim, 1> dx;
-  Eigen::Matrix<double, kStateDim, 1> b;
-  Eigen::Matrix<double, kMeasDim, kStateDim> J;
-  Eigen::Matrix<double, kStateDim, kStateDim> H;
+  Eigen::Matrix<double, kMeasDim, kStateDim> Jall;
+  Eigen::Matrix<double, kMeasDim, 6> J;
+  Eigen::Matrix<double, 6, 1> dx;
+  Eigen::Matrix<double, 6, 1> b;
+  Eigen::Matrix<double, 6, 6> H;
   const auto &InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
   for (int i = 0; i < n_ite; i++) {
-    const Eigen::Isometry3d &Twb_i = state_est.pose();  // x_i
-
-    J = factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
-    factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
+    Jall = -1.0 * factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
+    J.leftCols(3) = Jall.leftCols(3);
+    J.rightCols(3) = Jall.block<6, 3>(0, 6);
+    // factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
     auto residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
-    std::cout << "res: " << residual.transpose() << std::endl;
+    // std::cout << "res: " << residual.transpose() << std::endl;
 
     cost = residual.squaredNorm();
     std::cout << "iteration " << i << " cost: " << std::cout.precision(12) << cost << ", last cost: " << last_cost
               << std::endl;
-    if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
-      lambda *= 10.0f;
-    } else {
-      lambda /= 10.0f;
+    if (opt_type == OptType::kGN)
+      if (i > 0 && cost > last_cost) break;
+    if (opt_type == OptType::kLM) {
+      if (i > 0 && cost >= last_cost)
+        lambda *= 10.0f;
+      else
+        lambda /= 10.0f;
     }
     last_cost = cost;
 
-    b = Eigen::Matrix<double, kStateDim, 1>::Zero();
-    H = Eigen::Matrix<double, kStateDim, kStateDim>::Zero();
-    H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, kStateDim, kStateDim>::Identity() * lambda;
-    b.noalias() += J.transpose() * InfoMat * residual;
+    b = Eigen::Matrix<double, 6, 1>::Zero();
+    H = Eigen::Matrix<double, 6, 6>::Zero();
+    H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, 6, 6>::Identity() * lambda;
+    b.noalias() += -1.0 * J.transpose() * InfoMat * residual;
 
     double cond_num = Utils::condition_number(H);
     std::cout << "cond num of H: " << cond_num << std::endl;
@@ -153,8 +162,9 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     dx = H.ldlt().solve(b);
 
-    state_est = state_est + dx;
+    State::update_pose(Twb_i, dx);
   }
+  state_est.set_pose(Twb_i);
 #endif
 
 #if WITH_CS
