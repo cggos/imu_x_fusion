@@ -132,23 +132,20 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     const Eigen::Isometry3d &Twb_i = state_est.pose();  // x_i
 
     J = factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
-
     factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
     auto residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
-
     std::cout << "res: " << residual.transpose() << std::endl;
 
     cost = residual.squaredNorm();
-
     std::cout << "iteration " << i << " cost: " << std::cout.precision(12) << cost << ", last cost: " << last_cost
               << std::endl;
-
-    // if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
-    //   lambda *= 10.0f;
-    // } else {
-    //   lambda /= 10.0f;
-    // }
+    if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
+      lambda *= 10.0f;
+    } else {
+      lambda /= 10.0f;
+    }
+    last_cost = cost;
 
     H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, kStateDim, kStateDim>::Identity() * lambda;
     b.noalias() += J.transpose() * InfoMat * residual;
@@ -160,43 +157,39 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     dx = H.ldlt().solve(b);
 
     state_est = state_est + dx;
-
-    last_cost = cost;
   }
 #endif
 
 #if WITH_CS
-  Eigen::Matrix<double, kStateDim, 1> state_vec = map_ptr_->state_ptr_->vec();
-
-  Eigen::Matrix<double, 3, 1> vec_p = state_vec.segment<3>(0);
-  Eigen::Matrix<double, 3, 1> vec_R = state_vec.segment<3>(6);
+  state_est = *map_ptr_->state_ptr_;
+  auto vec_pq = state_est.vec_pq();
+  auto vec_vb = state_est.vec_vb();
   {
     ceres::Problem problem;
-    ceres::LossFunction *loss_function;
-    // loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
-    loss_function = nullptr;
+    ceres::LossFunction *loss_function = nullptr;
+    // loss_function = new ceres::HuberLoss(1.0);
+    // loss_function = new ceres::CauchyLoss(1.0);
     ceres::CostFunction *cost_function = new MAPCostFunctor(factor_odom6dof_ptr_, Tcb, Tvw, Tvo, R);
-    // ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-    // problem.AddParameterBlock(vec_pose, 7, local_parameterization);
-    problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_R.data());
+    ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+    problem.AddParameterBlock(vec_pq.data(), 7, local_parameterization);
+    problem.AddParameterBlock(vec_vb.data(), 9);
+    problem.AddResidualBlock(cost_function, loss_function, vec_pq.data());
 
     ceres::Solver::Options options;
-    options.dynamic_sparsity = true;
-    options.max_num_iterations = 100;
-    options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
-    options.minimizer_type = ceres::TRUST_REGION;
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-    options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+    // options.dynamic_sparsity = true;
+    options.max_num_iterations = 50;
+    // options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
+    // options.minimizer_type = ceres::TRUST_REGION;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.trust_region_strategy_type = ceres::DOGLEG;
     options.minimizer_progress_to_stdout = true;
 
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";
   }
-  state_vec.segment<3>(0) = vec_p;
-  state_vec.segment<3>(6) = vec_R;
-
-  state_est.from_vec(state_vec);
+  state_est.set_vec_pq(vec_pq);
+  state_est.set_vec_vb(vec_vb);
 #endif
 
 #if WITH_G2O

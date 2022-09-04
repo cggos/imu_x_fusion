@@ -65,6 +65,42 @@ class State {
     return Twb;
   }
 
+  const Eigen::Matrix<double, 7, 1> vec_pq() const {
+    Eigen::Matrix<double, 7, 1> vec;
+
+    vec.head(3) = p_wb_;
+    const auto &q = Eigen::Quaterniond(Rwb_);
+    vec.segment<3>(3) = q.vec();
+    vec(6) = q.w();
+
+    return vec;
+  }
+
+  const void set_vec_pq(const Eigen::Matrix<double, 7, 1> &vec_pq) {
+    p_wb_ = vec_pq.head(3);
+    Eigen::Quaterniond q;
+    q.vec() = vec_pq.segment<3>(3);
+    q.w() = vec_pq(6);
+    Rwb_ = q.toRotationMatrix();
+    // Rwb_ = Eigen::Quaterniond(vec_pq.tail(4).data()).toRotationMatrix();  // xyzw
+  }
+
+  const Eigen::Matrix<double, 9, 1> vec_vb() const {
+    Eigen::Matrix<double, 9, 1> vec;
+
+    vec.segment<3>(0) = v_wb_;
+    vec.segment<3>(3) = acc_bias;
+    vec.segment<3>(6) = gyr_bias;
+
+    return vec;
+  }
+
+  const void set_vec_vb(const Eigen::Matrix<double, 9, 1> &vec_vb) {
+    v_wb_ = vec_vb.segment<3>(0);
+    acc_bias = vec_vb.segment<3>(3);
+    gyr_bias = vec_vb.segment<3>(6);
+  }
+
   const Eigen::Matrix<double, kStateDim, 1> vec() const {
     Eigen::Matrix<double, kStateDim, 1> vec;
 

@@ -50,7 +50,7 @@ class PoseLocalParameterization : public ceres::LocalParameterization {
   virtual int LocalSize() const { return 6; };
 };
 
-class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
+class MAPCostFunctor : public ceres::SizedCostFunction<6, 7> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -68,17 +68,17 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
     // cov = R;
     cov.setIdentity();
     Lt_ = Eigen::LLT<Eigen::Matrix<double, kMeasDim, kMeasDim>>(cov).matrixL().transpose();
+    Lt_.setIdentity();
   }
 
   virtual ~MAPCostFunctor() {}
 
   virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {
-    Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_p(parameters[0]);
-    Eigen::Map<const Eigen::Matrix<double, 3, 1>> vec_R(parameters[1]);
+    Eigen::Map<const Eigen::Matrix<double, 7, 1>> vec_pq(parameters[0]);
 
     Eigen::Isometry3d Twb_i;  // x_i
-    Twb_i.translation() = vec_p;
-    Twb_i.linear() = Utils::rot_vec_to_mat(vec_R);
+    Twb_i.translation() = vec_pq.head(3);
+    Twb_i.linear() = Eigen::Quaterniond(vec_pq.tail(4).data()).toRotationMatrix();
 
     Eigen::Map<Eigen::Matrix<double, 6, 1>> residual(residuals);
     residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo_obs_.matrix());
@@ -86,16 +86,20 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 3> {
 
     // J = r(x)/delta X
     const auto& J = -1.0 * factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());
-    if (jacobians != NULL) {
-      if (jacobians[0] != NULL) {
-        Eigen::Map<Eigen::Matrix<double, 6, 3, Eigen::RowMajor>> J0(jacobians[0]);
-        J0 = Lt_ * J.block<6, 3>(0, 0);
-      }
-      if (jacobians[1] != NULL) {
-        Eigen::Map<Eigen::Matrix<double, 6, 3, Eigen::RowMajor>> J1(jacobians[1]);
-        J1 = Lt_ * J.block<6, 3>(0, 6);
+    if (jacobians != nullptr) {
+      if (jacobians[0] != nullptr) {
+        Eigen::Map<Eigen::Matrix<double, 6, 7, Eigen::RowMajor>> J0(jacobians[0]);
+
+        Eigen::Matrix<double, 6, 6> Jpose;
+        Jpose.leftCols(3) = J.block<6, 3>(0, 0);
+        Jpose.rightCols(3) = J.block<6, 3>(0, 6);
+
+        J0.leftCols(6) = Lt_ * Jpose;
+        J0.rightCols(1).setZero();
       }
     }
+
+    factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo_obs_.matrix());  // for debug
 
     return true;
   }
