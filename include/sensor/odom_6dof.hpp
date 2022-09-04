@@ -137,15 +137,18 @@ class Odom6Dof : public Observer {
 
     const auto &H = measurement_jacobian(mat_x, mat_z);
 
+    std::cout.setf(std::ios::fixed);
+    std::cout.precision(8);
+
     std::cout << "---------------------" << std::endl;
     std::cout << "(purt t) p res: " << (Tx1.translation() - Tx0.translation()).transpose() << std::endl;
-    std::cout << "(purt t) p Hx: " << (H.block<3, 3>(0, 0) * delta).transpose() << std::endl;
+    std::cout << "(purt t) p Hx:  " << (H.block<3, 3>(0, 0) * delta).transpose() << std::endl;
 
     std::cout << "(purt R) p res: " << (Tx2.translation() - Tx0.translation()).transpose() << std::endl;
-    std::cout << "(purt R) p Hx: " << (H.block<3, 3>(0, 6) * delta).transpose() << std::endl;
+    std::cout << "(purt R) p Hx:  " << (H.block<3, 3>(0, 6) * delta).transpose() << std::endl;
 
     std::cout << "(purt R) q res: " << State::rotation_residual(Tx2.linear(), Tx0.linear()).transpose() << std::endl;
-    std::cout << "(purt R) q Hx: " << (H.block<3, 3>(3, 6) * delta).transpose() << std::endl;
+    std::cout << "(purt R) q Hx:  " << (H.block<3, 3>(3, 6) * delta).transpose() << std::endl;
     std::cout << "---------------------" << std::endl;
   }
 

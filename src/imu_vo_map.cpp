@@ -112,7 +112,7 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     return;
   }
 
-  State state_est;
+  State &state_est = *map_ptr_->state_ptr_;
 #if WITH_DIY
   // G-N iteration update, same with EKF when n_ite = 1
   int n_ite = 50;
@@ -124,11 +124,6 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   Eigen::Matrix<double, kStateDim, kStateDim> H;
   const auto &InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
   for (int i = 0; i < n_ite; i++) {
-    b = Eigen::Matrix<double, kStateDim, 1>::Zero();
-    H = Eigen::Matrix<double, kStateDim, kStateDim>::Zero();
-
-    if (i == 0) state_est = *map_ptr_->state_ptr_;
-
     const Eigen::Isometry3d &Twb_i = state_est.pose();  // x_i
 
     J = factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
@@ -147,6 +142,8 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     }
     last_cost = cost;
 
+    b = Eigen::Matrix<double, kStateDim, 1>::Zero();
+    H = Eigen::Matrix<double, kStateDim, kStateDim>::Zero();
     H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, kStateDim, kStateDim>::Identity() * lambda;
     b.noalias() += J.transpose() * InfoMat * residual;
 
@@ -161,7 +158,6 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 #endif
 
 #if WITH_CS
-  state_est = *map_ptr_->state_ptr_;
   auto vec_pq = state_est.vec_pq();
   auto vec_vb = state_est.vec_vb();
   {
@@ -206,10 +202,6 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   gtsam::Values::shared_ptr initial(new gtsam::Values);
   initial->insert(id, gtsam::Pose3(Rwb, twb));
 #endif
-
-  // // update state and cov
-  // ekf_ptr_->update_P(H_i, R, K_i);
-  *map_ptr_->state_ptr_ = state_est;
 
   std::cout << "acc bias: " << map_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << map_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;
