@@ -14,7 +14,7 @@
 // choose one of the four
 #define WITH_DIY 1    // User Defined
 #define WITH_CS 0     // with Ceres-Solver
-#define WITH_G2O 0    // with G2O, TODO
+#define WITH_G2O 0    // with G2O
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
 #if WITH_DIY
@@ -114,11 +114,12 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   }
 
   State &state_est = *map_ptr_->state_ptr_;
+  auto InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
 #if WITH_DIY
   OptType opt_type = OptType::kLM;
 
   Eigen::Isometry3d Twb_i = state_est.pose();
-  
+
   // G-N iteration update, same with EKF when n_ite = 1
   int n_ite = 50;
   double lambda = opt_type == OptType::kLM ? 1.0 : 0.0;
@@ -128,7 +129,6 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   Eigen::Matrix<double, 6, 1> dx;
   Eigen::Matrix<double, 6, 1> b;
   Eigen::Matrix<double, 6, 6> H;
-  const auto &InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
   for (int i = 0; i < n_ite; i++) {
     Jall = -1.0 * factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
     J.leftCols(3) = Jall.leftCols(3);
@@ -199,34 +199,58 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 #endif
 
 #if WITH_G2O
-  typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 6>> Block;  // 每个误差项 优化变量维度，误差值维度
-  Block::LinearSolverType *linearSolver = new g2o::LinearSolverDense<Block::PoseMatrixType>();  // 线性方程求解器
-  Block *solver_ptr = new Block(std::unique_ptr<Block::LinearSolverType>(linearSolver));        // 矩阵块求解器
-
   g2o::OptimizationAlgorithm *solver = nullptr;
-  solver = new g2o::OptimizationAlgorithmGaussNewton(std::unique_ptr<Block>(solver_ptr));
+
+  typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 6>> Block;  // 每个误差项 优化变量维度，误差值维度
+  // Block::LinearSolverType *linearSolver = new g2o::LinearSolverDense<Block::PoseMatrixType>();  // 线性方程求解器
+  // Block *solver_ptr = new Block(std::unique_ptr<Block::LinearSolverType>(linearSolver));        // 矩阵块求解器
   // solver = new g2o::OptimizationAlgorithmLevenberg(std::unique_ptr<Block>(solver_ptr));
-  // solver = new g2o::OptimizationAlgorithmDogleg(std::unique_ptr<Block>(solver_ptr));
+
+  std::unique_ptr<Block::LinearSolverType> linearSolver(new g2o::LinearSolverDense<Block::PoseMatrixType>());
+  std::unique_ptr<Block> solver_ptr(new Block(std::move(linearSolver)));
+  // solver = new g2o::OptimizationAlgorithmGaussNewton(std::move(solver_ptr));
+  solver = new g2o::OptimizationAlgorithmLevenberg(std::move(solver_ptr));
+  // solver = new g2o::OptimizationAlgorithmDogleg(std::move(solver_ptr));
+
+  // (dynamic_cast<g2o::OptimizationAlgorithmLevenberg*>(solver))->setUserLambdaInit(1.0);
 
   g2o::SparseOptimizer optimizer;
   optimizer.setAlgorithm(solver);
   optimizer.setVerbose(true);
+  bool stop_flag = false;
+  optimizer.setForceStopFlag(&stop_flag);
 
   // g2o::VertexSE3 *v_pose = new g2o::VertexSE3();
   VertexPose *v_pose = new VertexPose();
   v_pose->setEstimate(state_est.pose());
   v_pose->setId(0);
   v_pose->setFixed(false);
+  v_pose->setMarginalized(false);
   optimizer.addVertex(v_pose);
 
   EdgePose *e_pose = new EdgePose(factor_odom6dof_ptr_);
   e_pose->setId(0);
   e_pose->setVertex(0, v_pose);
   e_pose->setMeasurement(Tvo);
+  {
+    e_pose->setInformation(InfoMat);
+
+    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+    e_pose->setRobustKernel(rk);
+    rk->setDelta(0.1);  // e_pose->th_huber_
+  }
   optimizer.addEdge(e_pose);
 
-  optimizer.initializeOptimization();
-  optimizer.optimize(30);
+  double lambda = 1.0;
+  int its[2] = {30, 30};
+  for (int i = 0; i < 2; i++) {
+    if (i == 1) v_pose->A().noalias() += Eigen::Matrix<double, 6, 6>::Identity() * lambda;
+
+    v_pose->setEstimate(state_est.pose());
+
+    optimizer.initializeOptimization();
+    optimizer.optimize(its[i]);
+  }
 
   // g2o::VertexSE3 *pose_est = dynamic_cast<g2o::VertexSE3 *>(optimizer.vertex(0));
   state_est.set_pose(v_pose->estimate());
