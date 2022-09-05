@@ -8,22 +8,23 @@
 #include "common/utils.hpp"
 #include "common/view.hpp"
 #include "estimator/map.hpp"
-#include "estimator/map_cs.hpp"
 #include "sensor/imu.hpp"
 #include "sensor/odom_6dof.hpp"
 
 // choose one of the four
 #define WITH_DIY 1    // User Defined
 #define WITH_CS 0     // with Ceres-Solver
-#define WITH_G2O 0    // with G2O, TODO
+#define WITH_G2O 0    // with G2O
 #define WITH_GTSAM 0  // with GTSAM, TODO
 
-#if WITH_GTSAM
-#include <gtsam/nonlinear/GaussNewtonOptimizer.h>
-#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
-#include <gtsam/slam/BetweenFactor.h>
-#include <gtsam/slam/PriorFactor.h>
-#include <gtsam/slam/dataset.h>
+#if WITH_DIY
+enum OptType { kGN, kLM };
+#elif WITH_CS
+#include "estimator/map_cs.hpp"
+#elif WITH_G2O
+#include "estimator/map_g2o.hpp"
+#elif WITH_GTSAM
+#include "estimator/map_gtsam.hpp"
 #endif
 
 namespace cg {
@@ -112,46 +113,48 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
     return;
   }
 
-  State state_est;
+  State &state_est = *map_ptr_->state_ptr_;
+  auto InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
 #if WITH_DIY
+  OptType opt_type = OptType::kLM;
+
+  Eigen::Isometry3d Twb_i = state_est.pose();
+
   // G-N iteration update, same with EKF when n_ite = 1
   int n_ite = 50;
-  double lambda = 1.0;
+  double lambda = opt_type == OptType::kLM ? 1.0 : 0.0;
   double cost = 0, last_cost = 0;
-  Eigen::Matrix<double, kStateDim, 1> dx;
-  Eigen::Matrix<double, kStateDim, 1> b;
-  Eigen::Matrix<double, kMeasDim, kStateDim> J;
-  Eigen::Matrix<double, kStateDim, kStateDim> H;
-  const auto &InfoMat = Eigen::Matrix<double, kMeasDim, kMeasDim>::Identity();  // R.inverse();
+  Eigen::Matrix<double, kMeasDim, kStateDim> Jall;
+  Eigen::Matrix<double, kMeasDim, 6> J;
+  Eigen::Matrix<double, 6, 1> dx;
+  Eigen::Matrix<double, 6, 1> b;
+  Eigen::Matrix<double, 6, 6> H;
   for (int i = 0; i < n_ite; i++) {
-    b = Eigen::Matrix<double, kStateDim, 1>::Zero();
-    H = Eigen::Matrix<double, kStateDim, kStateDim>::Zero();
-
-    if (i == 0) state_est = *map_ptr_->state_ptr_;
-
-    const Eigen::Isometry3d &Twb_i = state_est.pose();  // x_i
-
-    J = factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
-
-    factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
+    Jall = -1.0 * factor_odom6dof_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
+    J.leftCols(3) = Jall.leftCols(3);
+    J.rightCols(3) = Jall.block<6, 3>(0, 6);
+    // factor_odom6dof_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
     auto residual = factor_odom6dof_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
-
-    std::cout << "res: " << residual.transpose() << std::endl;
+    // std::cout << "res: " << residual.transpose() << std::endl;
 
     cost = residual.squaredNorm();
-
     std::cout << "iteration " << i << " cost: " << std::cout.precision(12) << cost << ", last cost: " << last_cost
               << std::endl;
-
-    if (i > 0 && cost >= last_cost) {  // cost increase, update is not good
-      lambda *= 10.0f;
-    } else {
-      lambda /= 10.0f;
+    if (opt_type == OptType::kGN)
+      if (i > 0 && cost > last_cost) break;
+    if (opt_type == OptType::kLM) {
+      if (i > 0 && cost >= last_cost)
+        lambda *= 10.0f;
+      else
+        lambda /= 10.0f;
     }
+    last_cost = cost;
 
-    H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, kStateDim, kStateDim>::Identity() * lambda;
-    b.noalias() += J.transpose() * InfoMat * residual;
+    b = Eigen::Matrix<double, 6, 1>::Zero();
+    H = Eigen::Matrix<double, 6, 6>::Zero();
+    H.noalias() += J.transpose() * InfoMat * J + Eigen::Matrix<double, 6, 6>::Identity() * lambda;
+    b.noalias() += -1.0 * J.transpose() * InfoMat * residual;
 
     double cond_num = Utils::condition_number(H);
     std::cout << "cond num of H: " << cond_num << std::endl;
@@ -159,45 +162,98 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     dx = H.ldlt().solve(b);
 
-    state_est = state_est + dx;
-
-    last_cost = cost;
+    State::update_pose(Twb_i, dx);
   }
+  state_est.set_pose(Twb_i);
 #endif
 
 #if WITH_CS
-  Eigen::Matrix<double, kStateDim, 1> state_vec = map_ptr_->state_ptr_->vec();
-
-  Eigen::Matrix<double, 3, 1> vec_p = state_vec.segment<3>(0);
-  Eigen::Matrix<double, 3, 1> vec_R = state_vec.segment<3>(6);
+  auto vec_pq = state_est.vec_pq();
+  auto vec_p = vec_pq.head(3);
+  auto vec_q = vec_pq.tail(4);
   {
     ceres::Problem problem;
-    ceres::LossFunction *loss_function = new ceres::HuberLoss(0.1);  // ceres::CauchyLoss(1.0)
-    ceres::CostFunction *cost_function = new MAPCostFunctor(map_ptr_, Tcb, Tvw, Tvo, R);
-    // ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-    // problem.AddParameterBlock(vec_pose, 7, local_parameterization);
-    problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_R.data());
+    ceres::LossFunction *loss_function = nullptr;
+    // loss_function = new ceres::HuberLoss(1.0);
+    loss_function = new ceres::CauchyLoss(1.0);
+    ceres::CostFunction *cost_function = new MAPCostFunctor(factor_odom6dof_ptr_, Tcb, Tvw, Tvo, R);
+    problem.AddParameterBlock(vec_p.data(), 3);
+    problem.AddParameterBlock(vec_q.data(), 4, new QuatLocalParameterization());  // ceres::EigenQuaternionManifold()
+    problem.AddResidualBlock(cost_function, loss_function, vec_p.data(), vec_q.data());
 
     ceres::Solver::Options options;
-    options.dynamic_sparsity = true;
-    options.max_num_iterations = 100;
-    options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
-    options.minimizer_type = ceres::TRUST_REGION;
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-    options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+    // options.dynamic_sparsity = true;
+    options.max_num_iterations = 50;
+    // options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
+    // options.minimizer_type = ceres::TRUST_REGION;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.trust_region_strategy_type = ceres::DOGLEG;
     options.minimizer_progress_to_stdout = true;
 
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";
   }
-  state_vec.segment<3>(0) = vec_p;
-  state_vec.segment<3>(6) = vec_R;
-
-  state_est.from_vec(state_vec);
+  vec_pq << vec_p, vec_q;
+  state_est.set_vec_pq(vec_pq);
 #endif
 
 #if WITH_G2O
+  g2o::OptimizationAlgorithm *solver = nullptr;
+
+  typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 6>> Block;  // 每个误差项 优化变量维度，误差值维度
+  // Block::LinearSolverType *linearSolver = new g2o::LinearSolverDense<Block::PoseMatrixType>();  // 线性方程求解器
+  // Block *solver_ptr = new Block(std::unique_ptr<Block::LinearSolverType>(linearSolver));        // 矩阵块求解器
+  // solver = new g2o::OptimizationAlgorithmLevenberg(std::unique_ptr<Block>(solver_ptr));
+
+  std::unique_ptr<Block::LinearSolverType> linearSolver(new g2o::LinearSolverDense<Block::PoseMatrixType>());
+  std::unique_ptr<Block> solver_ptr(new Block(std::move(linearSolver)));
+  // solver = new g2o::OptimizationAlgorithmGaussNewton(std::move(solver_ptr));
+  solver = new g2o::OptimizationAlgorithmLevenberg(std::move(solver_ptr));
+  // solver = new g2o::OptimizationAlgorithmDogleg(std::move(solver_ptr));
+
+  // (dynamic_cast<g2o::OptimizationAlgorithmLevenberg*>(solver))->setUserLambdaInit(1.0);
+
+  g2o::SparseOptimizer optimizer;
+  optimizer.setAlgorithm(solver);
+  optimizer.setVerbose(true);
+  bool stop_flag = false;
+  optimizer.setForceStopFlag(&stop_flag);
+
+  // g2o::VertexSE3 *v_pose = new g2o::VertexSE3();
+  VertexPose *v_pose = new VertexPose();
+  v_pose->setEstimate(state_est.pose());
+  v_pose->setId(0);
+  v_pose->setFixed(false);
+  v_pose->setMarginalized(false);
+  optimizer.addVertex(v_pose);
+
+  EdgePose *e_pose = new EdgePose(factor_odom6dof_ptr_);
+  e_pose->setId(0);
+  e_pose->setVertex(0, v_pose);
+  e_pose->setMeasurement(Tvo);
+  {
+    e_pose->setInformation(InfoMat);
+
+    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+    e_pose->setRobustKernel(rk);
+    rk->setDelta(0.1);  // e_pose->th_huber_
+  }
+  optimizer.addEdge(e_pose);
+
+  double lambda = 1.0;
+  int its[2] = {30, 30};
+  for (int i = 0; i < 2; i++) {
+    if (i == 1) v_pose->A().noalias() += Eigen::Matrix<double, 6, 6>::Identity() * lambda;
+
+    v_pose->setEstimate(state_est.pose());
+
+    optimizer.initializeOptimization();
+    optimizer.optimize(its[i]);
+  }
+
+  // g2o::VertexSE3 *pose_est = dynamic_cast<g2o::VertexSE3 *>(optimizer.vertex(0));
+  state_est.set_pose(v_pose->estimate());
 #endif
 
 #if WITH_GTSAM
@@ -211,10 +267,6 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   gtsam::Values::shared_ptr initial(new gtsam::Values);
   initial->insert(id, gtsam::Pose3(Rwb, twb));
 #endif
-
-  // // update state and cov
-  // ekf_ptr_->update_P(H_i, R, K_i);
-  *map_ptr_->state_ptr_ = state_est;
 
   std::cout << "acc bias: " << map_ptr_->state_ptr_->acc_bias.transpose() << std::endl;
   std::cout << "gyr bias: " << map_ptr_->state_ptr_->gyr_bias.transpose() << std::endl;

@@ -41,15 +41,15 @@ class Odom6Dof : public Observer {
    * @return Eigen::MatrixXd
    */
   virtual Eigen::MatrixXd measurement_residual(const Eigen::MatrixXd &mat_x, const Eigen::MatrixXd &mat_z) {
-    Eigen::Isometry3d ios_x_in_z;
-    ios_x_in_z.matrix() = measurement_function(mat_x);
+    Eigen::Isometry3d iso_x_in_z;
+    iso_x_in_z.matrix() = measurement_function(mat_x);
 
-    Eigen::Isometry3d ios_z;
-    ios_z.matrix() = mat_z;
+    Eigen::Isometry3d iso_z;
+    iso_z.matrix() = mat_z;
 
     Eigen::Matrix<double, kMeasDim, 1> residual;
-    residual.topRows(3) = ios_z.translation() - ios_x_in_z.translation();
-    residual.bottomRows(3) = State::rotation_residual(ios_z.linear(), ios_x_in_z.linear());
+    residual.topRows(3) = iso_z.translation() - iso_x_in_z.translation();
+    residual.bottomRows(3) = State::rotation_residual(iso_z.linear(), iso_x_in_z.linear());
 
     return residual;
   }
@@ -137,15 +137,18 @@ class Odom6Dof : public Observer {
 
     const auto &H = measurement_jacobian(mat_x, mat_z);
 
+    std::cout.setf(std::ios::fixed);
+    std::cout.precision(8);
+
     std::cout << "---------------------" << std::endl;
     std::cout << "(purt t) p res: " << (Tx1.translation() - Tx0.translation()).transpose() << std::endl;
-    std::cout << "(purt t) p Hx: " << (H.block<3, 3>(0, 0) * delta).transpose() << std::endl;
+    std::cout << "(purt t) p Hx:  " << (H.block<3, 3>(0, 0) * delta).transpose() << std::endl;
 
     std::cout << "(purt R) p res: " << (Tx2.translation() - Tx0.translation()).transpose() << std::endl;
-    std::cout << "(purt R) p Hx: " << (H.block<3, 3>(0, 6) * delta).transpose() << std::endl;
+    std::cout << "(purt R) p Hx:  " << (H.block<3, 3>(0, 6) * delta).transpose() << std::endl;
 
     std::cout << "(purt R) q res: " << State::rotation_residual(Tx2.linear(), Tx0.linear()).transpose() << std::endl;
-    std::cout << "(purt R) q Hx: " << (H.block<3, 3>(3, 6) * delta).transpose() << std::endl;
+    std::cout << "(purt R) q Hx:  " << (H.block<3, 3>(3, 6) * delta).transpose() << std::endl;
     std::cout << "---------------------" << std::endl;
   }
 

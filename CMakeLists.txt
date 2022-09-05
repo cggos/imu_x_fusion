@@ -40,6 +40,14 @@ if(Ceres_FOUND)
   include_directories(${CERES_INCLUDE_DIRS})
 endif()
 
+find_package(g2o REQUIRED)
+if(g2o_FOUND)
+    include_directories(${g2o_INCLUDE_DIRS})
+    # link_directories(/usr/local/lib/)
+    message("  =========== g2o libs: " ${g2o_INCLUDE_DIRS})
+endif()
+set(g2o_LIBS g2o_core g2o_stuff g2o_types_sba g2o_types_slam3d g2o_solver_csparse g2o_csparse_extension)
+
 # find_package(GTSAMCMakeTools)
 # find_package(GTSAM REQUIRED)
 # include_directories(${GTSAM_INCLUDE_DIR})
@@ -171,7 +179,7 @@ add_executable(imu_vo_ukf_node src/imu_vo_ukf.cpp)
 target_link_libraries(imu_vo_ukf_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(imu_vo_map_node src/imu_vo_map.cpp)
-target_link_libraries(imu_vo_map_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
+target_link_libraries(imu_vo_map_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} ${g2o_LIBS})
 
 #############
 ## Install ##

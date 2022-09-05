@@ -97,18 +97,20 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
 
     const Eigen::Isometry3d &Twb_i = ekf_ptr_->state_ptr_i_->pose();  // x_i
 
+    // J
     H_i = ekf_ptr_->observer_ptr_->measurement_jacobian(Twb_i.matrix(), Tvo.matrix());
-
     ekf_ptr_->observer_ptr_->check_jacobian(Twb_i.matrix(), Tvo.matrix());  // for debug
 
+    // r
     auto residual = ekf_ptr_->observer_ptr_->measurement_residual(Twb_i.matrix(), Tvo.matrix());
-
     // for IEKF, residual -= H (x_prior - x_i)
     residual -= H_i * (*ekf_ptr_->state_ptr_ - *ekf_ptr_->state_ptr_i_);
-
     std::cout << "res: " << residual.transpose() << std::endl;
 
+    // K
     ekf_ptr_->update_K(H_i, R, K_i);
+
+    // update state
     *ekf_ptr_->state_ptr_i_ = *ekf_ptr_->state_ptr_ + K_i * residual;
   }
 
