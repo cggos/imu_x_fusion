@@ -2,62 +2,67 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://msf.cgabc.xyz/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://msf.cgabc.xyz/app/</loc>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/gis/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/gnss/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/gnss/app/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/gnss/geomagnetics/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/gnss/rtk/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/ins/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/ins/imu/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/ins/sins_ahrs/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/sensor/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/sensor/calib/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://msf.cgabc.xyz/sensor/type/radar/</loc>
-         <lastmod>2022-08-31</lastmod>
+         <lastmod>2022-09-18</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
