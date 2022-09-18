@@ -1,7 +1,5 @@
 # Radar
 
-* [cggos/lidar_radar_ekf_fusion](https://github.com/cggos/lidar_radar_ekf_fusion)
-
 ---
 
 ## LiDAR
