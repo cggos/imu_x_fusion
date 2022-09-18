@@ -110,3 +110,5 @@ nav:
     - App: gnss/app.md
 
   - GIS: gis.md
+
+  - Application: app.md
