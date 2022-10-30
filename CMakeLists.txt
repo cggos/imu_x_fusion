@@ -16,9 +16,11 @@ add_definitions(-w)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  nav_msgs
   roscpp
+  nav_msgs
+  cv_bridge
   eigen_conversions
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -83,12 +85,11 @@ set(g2o_LIBS g2o_core g2o_stuff g2o_types_sba g2o_types_slam3d g2o_solver_cspars
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
-## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+# Generate messages in the 'msg' folder
+add_message_files(
+  FILES
+  Encoder.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -104,11 +105,11 @@ set(g2o_LIBS g2o_core g2o_stuff g2o_types_sba g2o_types_slam3d g2o_solver_cspars
 #   Action2.action
 # )
 
-## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   nav_msgs
-# )
+# Generate added messages and services with any dependencies listed here
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -140,10 +141,11 @@ set(g2o_LIBS g2o_core g2o_stuff g2o_types_sba g2o_types_slam3d g2o_solver_cspars
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES imu_gnss_fusion
-#  CATKIN_DEPENDS nav_msgs roscpp
-#  DEPENDS system_lib
+  CATKIN_DEPENDS roscpp nav_msgs cv_bridge
+  DEPENDS system_lib
+  CATKIN_DEPENDS message_runtime
 )
 
 ###########
@@ -167,6 +169,9 @@ include_directories(
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(kaist_pub src/dataset/kaist_pub.cpp)
+target_link_libraries(kaist_pub ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(imu_gnss_ekf_node src/imu_gnss_ekf.cpp)
 set_target_properties(imu_gnss_ekf_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
