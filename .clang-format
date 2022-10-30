@@ -2,10 +2,10 @@
 # https://google.github.io/styleguide/cppguide.html
 BasedOnStyle: Google
 
-# IndentWidth: 4
-
 ColumnLimit: 120 # 0, 120
 
-AllowAllParametersOfDeclarationOnNextLine: true
-AllowAllArgumentsOnNextLine: true
+# AllowAllParametersOfDeclarationOnNextLine: true
+# AllowAllArgumentsOnNextLine: true
+
 BinPackParameters: false
+BinPackArguments: false
