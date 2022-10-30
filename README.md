@@ -1,10 +1,16 @@
-# IMU + X Loosely-Coupled Fusion Localization
+# IMU + X Fusion
+
+IMU + X Loosely-Coupled Fusion Localization
+
+---
+
+## Overview
 
 * IMU + GPS
 
   - [x] ESKF: [Multi-Sensor Fusion: IMU and GPS loose fusion based on ESKF](https://cgabc.xyz/posts/4e9a780e/)
 
-* IMU + 6DoF Odom (Stereo Visual Odometry)
+* IMU + 6DoF Odom (e.g.: Stereo Visual Odometry)
 
   - [x] ESKF: [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on ESKF (Presentation)](http://dx.doi.org/10.13140/RG.2.2.28797.69602)
 
@@ -12,9 +18,8 @@
 
   - [x] UKF(including JUKF and SVD-UKF): [IMU and 6 DoF Odometry (Stereo Visual Odometry) Loosely-Coupled Fusion Localization based on UKF](http://dx.doi.org/10.13140/RG.2.2.30602.54727)
 
-  - [x] MAP(User-defined L-M, Ceres-Solver)
+  - [x] MAP(User-defined L-M, Ceres-Solver, G2O and GTSAM)
 
------
 
 ## Features
 
@@ -37,11 +42,11 @@
     - [x] JUKF
     - [x] SVD-UKF
   - [ ] Particle Filter
-  - [ ] MAP
+  - [x] MAP
     - [x] User-defined G-N
     - [x] Ceres-Solver
-    - [ ] G2O
-    - [ ] GTSAM
+    - [x] G2O
+    - [x] GTSAM
 
 * Local / Global Angular Error (Rotation Perturbation)
   - [x] Local Angular Error (OK)
@@ -52,6 +57,7 @@
 
 * Debug
   - [x] Check Measurement Jacobian Matrix
+
 
 ## Requirements
 
@@ -72,6 +78,7 @@ tested on Ubuntu 16.04 and Ubuntu 18.04
     ```sh
     sudo apt install libgeographic-dev
     ```
+
 
 ## Build
 
@@ -173,6 +180,16 @@ sudo docker pull cggos/ubuntu-ros-slam:bionic-melodic
 
 # modify the script for running others
 ```
+
+
+## Code Format
+
+code format based on Google style
+
+```sh
+./batch_format.sh
+```
+
 
 ## Docs
 
