@@ -23,6 +23,9 @@ IMU + X Loosely-Coupled Fusion Localization
 
 ## Features
 
+* Dataset
+  - [x] KAIST dataset: ROS publish
+
 * Sensors
   - [x] IMU
     - [x] Numerical Integration (TODO: RK4) 
@@ -168,6 +171,13 @@ roslaunch imu_x_fusion imu_vo_fusion_mynteye.launch
 
 roslaunch mynt_eye_ros_wrapper mynteye.launch
 ```
+
+### Run with KAIST Dataset
+
+```sh
+rosrun imu_x_fusion kaist_pub /dev_sdb/datasets/KAIST/urban39-pankyo
+```
+
 
 ## Run with Docker
 
