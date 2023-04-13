@@ -9,7 +9,7 @@ endif()
 
 # Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++14 -g) # for std::make_unique
-
+set(CMAKE_CXX_STANDARD 14)
 add_definitions(-w)
 
 ## Find catkin macros and libraries
