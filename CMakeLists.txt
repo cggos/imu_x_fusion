@@ -172,6 +172,7 @@ include_directories(
 
 add_executable(kaist_pub src/dataset/kaist_pub.cpp)
 target_link_libraries(kaist_pub ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(kaist_pub ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(imu_gnss_ekf_node src/imu_gnss_ekf.cpp)
 set_target_properties(imu_gnss_ekf_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)
