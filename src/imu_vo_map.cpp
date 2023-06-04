@@ -11,12 +11,6 @@
 #include "sensor/imu.hpp"
 #include "sensor/odom_6dof.hpp"
 
-// choose one of the four
-#define WITH_DIY 1    // User Defined
-#define WITH_CS 0     // with Ceres-Solver
-#define WITH_G2O 0    // with G2O
-#define WITH_GTSAM 0  // with GTSAM, TODO
-
 #if WITH_DIY
 enum OptType { kGN, kLM };
 #elif WITH_CS
