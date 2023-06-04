@@ -9,7 +9,7 @@ endif()
 
 # Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++14 -g) # for std::make_unique
-
+set(CMAKE_CXX_STANDARD 14)
 add_definitions(-w)
 
 ## Find catkin macros and libraries
@@ -172,6 +172,7 @@ include_directories(
 
 add_executable(kaist_pub src/dataset/kaist_pub.cpp)
 target_link_libraries(kaist_pub ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(kaist_pub ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(imu_gnss_ekf_node src/imu_gnss_ekf.cpp)
 set_target_properties(imu_gnss_ekf_node PROPERTIES COMPILE_DEFINITIONS EIGEN_NO_MALLOC)

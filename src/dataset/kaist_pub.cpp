@@ -115,7 +115,7 @@ int main(int argc, char* argv[]) {
     const string& sensor_type = line_data_vec[1];
     if (sensor_type == "stereo") {
       const string img_file = sData_path + "/image/stereo_left/" + time_str + ".png";
-      const cv::Mat raw_image = cv::imread(img_file, CV_LOAD_IMAGE_ANYDEPTH);
+      const cv::Mat raw_image = cv::imread(img_file, cv::IMREAD_ANYDEPTH);
       if (raw_image.empty()) {
         cerr << "[PublishData]: Failed to open image at time: " << time_str;
         return -1;
