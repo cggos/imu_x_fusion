@@ -2,26 +2,23 @@
 
 #include "estimator/estimator.hpp"
 #include "fusion/predictor.hpp"
-#include "fusion/updator.hpp"
 
 namespace cg {
 
-class MAP : public StateEstimator, public Predictor, public Updator {
+class MAP : public StateEstimator {
  public:
-  MAP(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : Predictor(state_ptr_, acc_n, gyr_n, acc_w, gyr_w) {}
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
-    State last_state = *state_ptr_;
+  using Ptr = std::shared_ptr<MAP>;
 
-    state_ptr_->timestamp = curr_imu->timestamp;
+  MAP() = default;
 
-    imu_model_.propagate_state(last_imu, curr_imu, last_state, *state_ptr_);
-  }
+  void predict(Predictor::Data::ConstPtr data_ptr) { predictor_ptr_->process(data_ptr); }
 
-  ~MAP() {}
+  virtual ~MAP() {}
+
+ public:
+  Predictor::Ptr predictor_ptr_;
 };
-
-using MAPPtr = std::shared_ptr<MAP>;
 
 }  // namespace cg

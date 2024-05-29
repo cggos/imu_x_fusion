@@ -7,6 +7,7 @@
 #include "common/utils.hpp"
 #include "common/view.hpp"
 #include "estimator/ekf.hpp"
+#include "sensor/imu.hpp"
 #include "sensor/odom_6dof.hpp"
 
 namespace cg {
@@ -38,17 +39,30 @@ class EKFFusionNode {
     sigma_rp *= kDegreeToRadian;
     sigma_yaw *= kDegreeToRadian;
 
-    ekf_ptr_ = std::make_unique<EKF>(acc_n, gyr_n, acc_w, gyr_w);
-    ekf_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    ekf_ptr_ = std::make_unique<EKF>(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    ekf_ptr_->predictor_ptr_ = std::make_shared<IMU>(ekf_ptr_->state_ptr_, acc_n, gyr_n, acc_w, gyr_w);
     ekf_ptr_->observer_ptr_ = std::make_shared<Odom6Dof>();
 
-    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&EKF::imu_callback, ekf_ptr_.get(), _1));
+    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&EKFFusionNode::imu_callback, this, _1));
+
     vo_sub_ = nh.subscribe(topic_vo, 10, &EKFFusionNode::vo_callback, this);
 
     Tcb = Utils::getTransformEigen(pnh, "cam0/T_cam_imu");
   }
 
   ~EKFFusionNode() {}
+
+  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
+    Eigen::Vector3d acc, gyr;
+    acc[0] = imu_msg->linear_acceleration.x;
+    acc[1] = imu_msg->linear_acceleration.y;
+    acc[2] = imu_msg->linear_acceleration.z;
+    gyr[0] = imu_msg->angular_velocity.x;
+    gyr[1] = imu_msg->angular_velocity.y;
+    gyr[2] = imu_msg->angular_velocity.z;
+
+    ekf_ptr_->predict(std::make_shared<ImuData>(imu_msg->header.stamp.toSec(), acc, gyr));
+  }
 
   void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
@@ -70,8 +84,8 @@ void EKFFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
-  if (!ekf_ptr_->inited_) {
-    if (!ekf_ptr_->init(vo_msg->header.stamp.toSec())) return;
+  if (!ekf_ptr_->predictor_ptr_->inited_) {
+    if (!ekf_ptr_->predictor_ptr_->init(vo_msg->header.stamp.toSec())) return;
 
     Eigen::Isometry3d Tb0bm;
     Tb0bm.linear() = ekf_ptr_->state_ptr_->Rwb_;

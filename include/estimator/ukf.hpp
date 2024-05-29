@@ -3,6 +3,7 @@
 #include <boost/math/distributions/chi_squared.hpp>
 
 #include "estimator/kf.hpp"
+#include "sensor/imu.hpp"
 #include "sensor/odom_6dof.hpp"
 
 namespace cg {
@@ -11,12 +12,13 @@ constexpr int kStateDimAug = kStateDim + kNoiseDim;
 
 class UKF : public KF {
  public:
-  UKF() = delete;
+  UKF() = default;
 
   UKF(const UKF &) = delete;
 
-  explicit UKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : KF(acc_n, gyr_n, acc_w, gyr_w) {
+  explicit UKF(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
+    state_ptr_->set_cov(sigma_p, sigma_v, sigma_rp, sigma_yaw, sigma_ba, sigma_bg);
+
     sigma_points_num_ = is_Q_aug_ ? 2 * kStateDimAug + 1 : 2 * kStateDim + 1;
 
     double weight_m0, weight_c0, weight_i;
@@ -34,15 +36,27 @@ class UKF : public KF {
     }
   }
 
-  void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
-    const double dt = curr_imu->timestamp - last_imu->timestamp;
+  virtual ~UKF() {}
 
-    state_ptr_->timestamp = curr_imu->timestamp;
+  virtual void predict(Predictor::Data::ConstPtr data_ptr) {
+    predictor_ptr_->process(data_ptr, std::bind(&UKF::predict_imu, this, std::placeholders::_1, std::placeholders::_2));
+  }
+
+  void predict_imu(Predictor::Data::ConstPtr last_ptr, Predictor::Data::ConstPtr curr_ptr) {
+    if (!last_ptr || !curr_ptr) {
+      return;
+    }
+
+    const double dt = curr_ptr->timestamp_ - last_ptr->timestamp_;
+
+    state_ptr_->timestamp = curr_ptr->timestamp_;
 
     const Eigen::MatrixXd &sp_mat0 = generate_sigma_points(dt);
 
-    predict_sigma_points(last_imu, curr_imu, sp_mat0);
+    auto last_imu = std::make_shared<ImuData>(last_ptr->timestamp_, last_ptr->data_.head(3), last_ptr->data_.tail(3));
+    auto curr_imu = std::make_shared<ImuData>(curr_ptr->timestamp_, curr_ptr->data_.head(3), curr_ptr->data_.tail(3));
 
+    predict_sigma_points(last_imu, curr_imu, sp_mat0);
     predict_sigma_points_mean_cov(last_imu, curr_imu);
   }
 
@@ -79,8 +93,6 @@ class UKF : public KF {
     state_ptr_->cov = predicted_P;
   }
 
-  virtual ~UKF() {}
-
  private:
   void compute_scale_weights(double &scale, double &weight_m0, double &weight_c0, double &weight_i) {
     int N = is_Q_aug_ ? kStateDimAug : kStateDim;
@@ -113,7 +125,7 @@ class UKF : public KF {
     x0.head(kStateDim) = state_ptr_->vec();
 
     P0.topLeftCorner(kStateDim, kStateDim) = state_ptr_->cov;
-    if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = imu_model_.noise_cov(dt);  // TODO: Q with dt or not ?
+    if (is_Q_aug_) P0.bottomRightCorner(kNoiseDim, kNoiseDim) = imu_model_->noise_cov(dt);  // TODO: Q with dt or not ?
 
     Eigen::MatrixXd L;
     if (!is_SVD_P_)
@@ -137,7 +149,7 @@ class UKF : public KF {
     return sp_mat0;
   }
 
-  void predict_sigma_points(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu, const Eigen::MatrixXd &sp_mat0) {
+  void predict_sigma_points(ImuData::ConstPtr last_imu, ImuData::ConstPtr curr_imu, const Eigen::MatrixXd &sp_mat0) {
     predicted_sp_mat_ = Eigen::MatrixXd::Zero(kStateDim, sigma_points_num_);
     for (int i = 0; i < sigma_points_num_; i++) {
       const Eigen::VectorXd &sp = sp_mat0.col(i);
@@ -145,14 +157,14 @@ class UKF : public KF {
       last_state.from_vec(sp.head(kStateDim));
       if (is_Q_aug_) {
         const Eigen::VectorXd &noise_vec = sp.segment<kNoiseDim>(kStateDim);
-        imu_model_.propagate_state(last_imu, curr_imu, last_state, state, true, false, noise_vec);
+        imu_model_->propagate_state(last_imu, curr_imu, last_state, state, true, false, noise_vec);
       } else
-        imu_model_.propagate_state(last_imu, curr_imu, last_state, state, true, true);
+        imu_model_->propagate_state(last_imu, curr_imu, last_state, state, true, true);
       predicted_sp_mat_.col(i) = state.vec();
     }
   }
 
-  void predict_sigma_points_mean_cov(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
+  void predict_sigma_points_mean_cov(ImuData::ConstPtr last_imu, ImuData::ConstPtr curr_imu) {
     // predict sigma points mean
     Eigen::VectorXd predicted_x = Eigen::VectorXd::Zero(kStateDim);
     for (int c = 0; c < sigma_points_num_; c++) {
@@ -168,13 +180,18 @@ class UKF : public KF {
         dx = predicted_sp_mat_.col(c) - predicted_x;
         predicted_P += weights_c_[c] * dx * dx.transpose();
       }
-      const double dt = curr_imu->timestamp - last_imu->timestamp;
-      state_ptr_->cov = predicted_P + imu_model_.noise_cov_discret_time(dt);  // will diverge if not add Q
+      const double dt = curr_imu->timestamp_ - last_imu->timestamp_;
+      state_ptr_->cov = predicted_P + imu_model_->noise_cov_discret_time(dt);  // will diverge if not add Q
     } else
-      imu_model_.propagate_state_cov(last_imu, curr_imu, *state_ptr_, *state_ptr_);
+      imu_model_->propagate_state_cov(last_imu, curr_imu, *state_ptr_, *state_ptr_);
   }
 
   void predict_measurement_sigma_points(const Eigen::Isometry3d &Tvw, const Eigen::Isometry3d &Tcb) {
+    if (predicted_sp_mat_.size() == 0) {
+      std::cerr << __FUNCTION__ << ": Empty predicted_sp_mat_ !!!" << std::endl;
+      return;
+    }
+
     Eigen::Isometry3d Twb;
     predicted_meas_sp_mat_ = Eigen::MatrixXd::Zero(kMeasDim, sigma_points_num_);
     for (int i = 0; i < sigma_points_num_; i++) {
@@ -230,6 +247,9 @@ class UKF : public KF {
     } else
       return true;
   }
+
+ public:
+  IMU::Ptr imu_model_;
 
  private:
   bool is_Q_aug_ = true;   // P  <--  [P Q]  or  P + Q

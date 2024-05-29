@@ -10,6 +10,10 @@ enum JACOBIAN_MEASUREMENT { HX_X, NEGATIVE_RX_X };  // h(x)/delta X, -r(x)/delta
 
 class Observer : public Factor {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  using Ptr = std::shared_ptr<Observer>;
+
   Observer() = default;
 
   Observer(const Observer &) = delete;
@@ -18,6 +22,5 @@ class Observer : public Factor {
 
   virtual Eigen::MatrixXd measurement_function(const Eigen::MatrixXd &mat_x) = 0;
 };
-using ObserverPtr = std::shared_ptr<Observer>;
 
 }  // namespace cg

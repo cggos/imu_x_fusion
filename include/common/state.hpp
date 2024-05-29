@@ -29,6 +29,8 @@ class State {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+  using Ptr = std::shared_ptr<State>;
+
   // error-state
   MatrixSD cov;
 
@@ -245,6 +247,5 @@ class State {
     return 2.0 * q_res.vec() / q_res.w();
   }
 };
-using StatePtr = std::shared_ptr<State>;
 
 }  // namespace cg
