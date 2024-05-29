@@ -9,7 +9,7 @@ class StateEstimator {
   StateEstimator() { state_ptr_ = std::make_shared<State>(); }
 
  public:
-  StatePtr state_ptr_;
+  State::Ptr state_ptr_;
 };
 
 }  // namespace cg

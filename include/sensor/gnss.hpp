@@ -16,17 +16,20 @@ struct GpsData {
 
   Eigen::Vector3d lla;  // Latitude in degree, longitude in degree, and altitude in meter
   Eigen::Matrix3d cov;  // Covariance in m^2
+
+  using Ptr = std::shared_ptr<GpsData>;
+  using ConstPtr = std::shared_ptr<const GpsData>;
 };
-using GpsDataPtr = std::shared_ptr<GpsData>;
-using GpsDataConstPtr = std::shared_ptr<const GpsData>;
 
 class GNSS : public Observer {
  public:
+  using Ptr = std::shared_ptr<GNSS>;
+
   GNSS() = default;
 
   virtual ~GNSS() {}
 
-  void set_params(GpsDataConstPtr gps_data_ptr, const Eigen::Vector3d &I_p_Gps = Eigen::Vector3d::Zero()) {
+  void set_params(GpsData::ConstPtr gps_data_ptr, const Eigen::Vector3d &I_p_Gps = Eigen::Vector3d::Zero()) {
     init_lla_ = gps_data_ptr->lla;
     I_p_Gps_ = I_p_Gps;
   }
@@ -61,7 +64,7 @@ class GNSS : public Observer {
    * @param gps_data_ptr
    * @return Eigen::Vector3d
    */
-  Eigen::Vector3d g2l(GpsDataConstPtr gps_data_ptr) {
+  Eigen::Vector3d g2l(GpsData::ConstPtr gps_data_ptr) {
     Eigen::Vector3d p_G_Gps;
     GNSS::lla2enu(init_lla_, gps_data_ptr->lla, &p_G_Gps);
     return p_G_Gps;
@@ -101,6 +104,5 @@ class GNSS : public Observer {
   Eigen::Vector3d init_lla_;
   Eigen::Vector3d I_p_Gps_ = Eigen::Vector3d::Zero();
 };
-using GNSSPtr = std::shared_ptr<GNSS>;
 
 }  // namespace cg

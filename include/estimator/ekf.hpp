@@ -19,7 +19,7 @@ class EKF : public KF {
 
   virtual ~EKF() {}
 
-  virtual void predict(Predictor::DataConstPtr data_ptr) { predictor_ptr_->process(data_ptr); }
+  virtual void predict(Predictor::Data::ConstPtr data_ptr) { predictor_ptr_->process(data_ptr); }
 
   template <class H_type, class R_type, class K_type>
   void update_K(const Eigen::MatrixBase<H_type> &H, const Eigen::MatrixBase<R_type> &R, Eigen::MatrixBase<K_type> &K) {
@@ -38,7 +38,7 @@ class EKF : public KF {
   }
 
  public:
-  StatePtr state_ptr_i_;  // for IEKF
+  State::Ptr state_ptr_i_;  // for IEKF
 };
 
 using EKFPtr = std::unique_ptr<EKF>;

@@ -38,11 +38,11 @@ class UKF : public KF {
 
   virtual ~UKF() {}
 
-  virtual void predict(Predictor::DataConstPtr data_ptr) {
+  virtual void predict(Predictor::Data::ConstPtr data_ptr) {
     predictor_ptr_->process(data_ptr, std::bind(&UKF::predict_imu, this, std::placeholders::_1, std::placeholders::_2));
   }
 
-  void predict_imu(Predictor::DataConstPtr last_ptr, Predictor::DataConstPtr curr_ptr) {
+  void predict_imu(Predictor::Data::ConstPtr last_ptr, Predictor::Data::ConstPtr curr_ptr) {
     if (!last_ptr || !curr_ptr) {
       return;
     }
@@ -149,7 +149,7 @@ class UKF : public KF {
     return sp_mat0;
   }
 
-  void predict_sigma_points(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu, const Eigen::MatrixXd &sp_mat0) {
+  void predict_sigma_points(ImuData::ConstPtr last_imu, ImuData::ConstPtr curr_imu, const Eigen::MatrixXd &sp_mat0) {
     predicted_sp_mat_ = Eigen::MatrixXd::Zero(kStateDim, sigma_points_num_);
     for (int i = 0; i < sigma_points_num_; i++) {
       const Eigen::VectorXd &sp = sp_mat0.col(i);
@@ -164,7 +164,7 @@ class UKF : public KF {
     }
   }
 
-  void predict_sigma_points_mean_cov(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
+  void predict_sigma_points_mean_cov(ImuData::ConstPtr last_imu, ImuData::ConstPtr curr_imu) {
     // predict sigma points mean
     Eigen::VectorXd predicted_x = Eigen::VectorXd::Zero(kStateDim);
     for (int c = 0; c < sigma_points_num_; c++) {

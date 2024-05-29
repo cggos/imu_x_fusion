@@ -81,7 +81,7 @@ void FusionNode::gps_callback(const sensor_msgs::NavSatFixConstPtr &gps_msg) {
     return;
   }
 
-  GpsDataPtr gps_data_ptr = std::make_shared<GpsData>();
+  GpsData::Ptr gps_data_ptr = std::make_shared<GpsData>();
   gps_data_ptr->timestamp = gps_msg->header.stamp.toSec();
   gps_data_ptr->lla[0] = gps_msg->latitude;
   gps_data_ptr->lla[1] = gps_msg->longitude;

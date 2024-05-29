@@ -18,18 +18,19 @@ class ImuData : public Predictor::Data {
 
   ImuData(double ts, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
       : Predictor::Data(ts, acc, gyr), acc(acc), gyr(gyr) {}
+
+  using Ptr = std::shared_ptr<ImuData>;
+  using ConstPtr = std::shared_ptr<const ImuData>;
 };
-using ImuDataPtr = std::shared_ptr<ImuData>;
-using ImuDataConstPtr = std::shared_ptr<const ImuData>;
 
 class IMU : public Predictor {
  public:
-  IMU(StatePtr state_ptr, double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
+  IMU(State::Ptr state_ptr, double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
       : Predictor(state_ptr), acc_noise_(acc_n), gyr_noise_(gyr_n), acc_bias_noise_(acc_w), gyr_bias_noise_(gyr_w) {}
 
   using Ptr = std::shared_ptr<IMU>;
 
-  virtual void predict(DataConstPtr last_ptr, DataConstPtr curr_ptr) {
+  virtual void predict(Data::ConstPtr last_ptr, Data::ConstPtr curr_ptr) {
     auto last_imu = last_ptr->data_;
     auto curr_imu = curr_ptr->data_;
     if (last_imu.size() != 6 || curr_imu.size() != 6) return;
@@ -38,14 +39,14 @@ class IMU : public Predictor {
 
     state_ptr_->timestamp = curr_ptr->timestamp_;
 
-    ImuDataPtr last_imu_ptr = std::make_shared<ImuData>(last_ptr->timestamp_, last_imu.head(3), last_imu.tail(3));
-    ImuDataPtr curr_imu_ptr = std::make_shared<ImuData>(curr_ptr->timestamp_, curr_imu.head(3), curr_imu.tail(3));
+    ImuData::Ptr last_imu_ptr = std::make_shared<ImuData>(last_ptr->timestamp_, last_imu.head(3), last_imu.tail(3));
+    ImuData::Ptr curr_imu_ptr = std::make_shared<ImuData>(curr_ptr->timestamp_, curr_imu.head(3), curr_imu.tail(3));
 
     propagate_state(last_imu_ptr, curr_imu_ptr, last_state, *state_ptr_);
     propagate_state_cov(last_imu_ptr, curr_imu_ptr, last_state, *state_ptr_);
   }
 
-  virtual bool push_data(DataConstPtr data_ptr) {
+  virtual bool push_data(Data::ConstPtr data_ptr) {
     auto acc = data_ptr->data_.head(3);
     auto gyr = data_ptr->data_.tail(3);
 
@@ -104,8 +105,8 @@ class IMU : public Predictor {
    * @param vec_wg
    */
   void propagate_state(
-      ImuDataConstPtr last_imu,
-      ImuDataConstPtr curr_imu,
+      ImuData::ConstPtr last_imu,
+      ImuData::ConstPtr curr_imu,
       const State &last_state,
       State &state,
       bool with_noise = false,
@@ -160,7 +161,10 @@ class IMU : public Predictor {
    * @param last_state
    * @param state
    */
-  void propagate_state_cov(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu, const State &last_state, State &state) {
+  void propagate_state_cov(ImuData::ConstPtr last_imu,
+                           ImuData::ConstPtr curr_imu,
+                           const State &last_state,
+                           State &state) {
     const double dt = curr_imu->timestamp_ - last_imu->timestamp_;
 
     const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias;
@@ -200,7 +204,7 @@ class IMU : public Predictor {
     return Fi * noise_cov(dt) * Fi.transpose();
   }
 
-  static bool init_rot_from_imudata(const std::deque<ImuDataConstPtr> &imu_buf, Eigen::Matrix3d &Rwb) {
+  static bool init_rot_from_imudata(const std::deque<ImuData::ConstPtr> &imu_buf, Eigen::Matrix3d &Rwb) {
     // mean and std of IMU accs
     Eigen::Vector3d sum_acc(0., 0., 0.);
     for (const auto &imu_data : imu_buf) sum_acc += imu_data->acc;
@@ -254,7 +258,7 @@ class IMU : public Predictor {
   double gyr_bias_noise_;
 
   static const int kImuBufSize = 200;
-  std::deque<ImuDataConstPtr> imu_buf_;
+  std::deque<ImuData::ConstPtr> imu_buf_;
 };
 
 }  // namespace cg

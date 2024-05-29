@@ -96,8 +96,8 @@ class MAPFusionNode {
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
 
-  MAPPtr map_ptr_;
-  FactorPtr factor_odom6dof_ptr_;
+  MAP::Ptr map_ptr_;
+  Factor::Ptr factor_odom6dof_ptr_;
 
   Viewer viewer_;
 };

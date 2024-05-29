@@ -36,7 +36,7 @@ class EdgePose : public g2o::BaseUnaryEdge<6, Eigen::Isometry3d, VertexPose> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  EdgePose(const FactorPtr& factor_odom6dof_ptr) : BaseUnaryEdge(), factor_odom6dof_ptr_(factor_odom6dof_ptr) {}
+  EdgePose(const Factor::Ptr& factor_odom6dof_ptr) : BaseUnaryEdge(), factor_odom6dof_ptr_(factor_odom6dof_ptr) {}
 
   virtual bool read(std::istream& in) {}
 
@@ -75,7 +75,7 @@ class EdgePose : public g2o::BaseUnaryEdge<6, Eigen::Isometry3d, VertexPose> {
   const float th_huber_ = 0.8 * std::sqrt(12.592);  // chi-square P for 6DoF
 
  private:
-  FactorPtr factor_odom6dof_ptr_;
+  Factor::Ptr factor_odom6dof_ptr_;
 };
 
 }  // namespace cg

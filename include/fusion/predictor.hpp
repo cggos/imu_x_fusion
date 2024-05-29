@@ -18,21 +18,24 @@ class Predictor {
       data_.head(3) = acc;
       data_.tail(3) = gyr;
     }
+
+    using Ptr = std::shared_ptr<Data>;
+    using ConstPtr = std::shared_ptr<const Data>;
   };
-  using DataPtr = std::shared_ptr<Data>;
-  using DataConstPtr = std::shared_ptr<const Data>;
+
+  using Ptr = std::shared_ptr<Predictor>;
 
   Predictor() = default;
 
   Predictor(const Predictor &) = delete;
 
-  Predictor(StatePtr state_ptr) : state_ptr_(state_ptr) {}
+  Predictor(State::Ptr state_ptr) : state_ptr_(state_ptr) {}
 
   virtual ~Predictor() {}
 
   virtual bool init(double ts_meas) = 0;
 
-  void process(DataConstPtr data_ptr, std::function<void(DataConstPtr, DataConstPtr)> func_predict = nullptr) {
+  void process(Data::ConstPtr data_ptr, std::function<void(Data::ConstPtr, Data::ConstPtr)> func_predict = nullptr) {
     if (!data_ptr) return;
 
     if (!push_data(data_ptr)) return;
@@ -46,18 +49,17 @@ class Predictor {
   }
 
  protected:
-  virtual bool push_data(DataConstPtr data_ptr) = 0;
+  virtual bool push_data(Data::ConstPtr data_ptr) = 0;
 
-  virtual void predict(DataConstPtr last_ptr, DataConstPtr curr_ptr) = 0;
+  virtual void predict(Data::ConstPtr last_ptr, Data::ConstPtr curr_ptr) = 0;
 
  public:
   bool inited_ = false;
 
-  StatePtr state_ptr_;
+  State::Ptr state_ptr_;
 
  protected:
-  DataConstPtr last_data_ptr_;
+  Data::ConstPtr last_data_ptr_;
 };
-using PredictorPtr = std::shared_ptr<Predictor>;
 
 }  // namespace cg
