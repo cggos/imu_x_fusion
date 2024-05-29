@@ -1,24 +1,25 @@
 #pragma once
 
 #include "estimator/estimator.hpp"
+#include "fusion/observer.hpp"
 #include "fusion/predictor.hpp"
-#include "fusion/updator.hpp"
 
 namespace cg {
 
-class KF : public StateEstimator, public Predictor, public Updator {
+class KF : public StateEstimator {
  public:
-  KF() {}
+  KF() = default;
 
-  KF(double acc_n, double gyr_n, double acc_w, double gyr_w) : Predictor(state_ptr_, acc_n, gyr_n, acc_w, gyr_w) {}
-
-  virtual void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) = 0;
+  virtual void predict(Predictor::DataConstPtr data_ptr) = 0;
 
   // virtual void update() = 0;
 
   virtual ~KF() {}
 
  public:
+  PredictorPtr predictor_ptr_;
+  ObserverPtr observer_ptr_;
+
   Eigen::MatrixXd measurement_cov_;
   Eigen::MatrixXd measurement_noise_cov_;
 };

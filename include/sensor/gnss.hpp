@@ -5,6 +5,8 @@
 #include <GeographicLib/LocalCartesian.hpp>
 #include <memory>
 
+#include "fusion/observer.hpp"
+
 namespace cg {
 
 constexpr int kMeasDim = 3;
