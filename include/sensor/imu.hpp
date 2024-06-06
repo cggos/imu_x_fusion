@@ -60,11 +60,8 @@ class IMU : public Predictor {
       last_am = imu_ptr->acc;
     }
 
-    if (!inited_) {
-      imu_buf_.push_back(imu_ptr);
-      if (imu_buf_.size() > kImuBufSize) imu_buf_.pop_front();
-      return false;
-    }
+    imu_buf_.push_back(imu_ptr);
+    if (imu_buf_.size() > kImuBufSize) imu_buf_.pop_front();
 
     return true;
   }
