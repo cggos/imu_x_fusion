@@ -38,12 +38,14 @@ class Predictor {
   void process(Data::ConstPtr data_ptr, std::function<void(Data::ConstPtr, Data::ConstPtr)> func_predict = nullptr) {
     if (!data_ptr) return;
 
-    if (!push_data(data_ptr)) return;
-
-    if (func_predict != nullptr)
-      func_predict(last_data_ptr_, data_ptr);
-    else
-      predict(last_data_ptr_, data_ptr);
+    if (!inited_)
+      push_data(data_ptr);
+    else {
+      if (func_predict != nullptr)
+        func_predict(last_data_ptr_, data_ptr);
+      else
+        predict(last_data_ptr_, data_ptr);
+    }
 
     last_data_ptr_ = data_ptr;
   }
