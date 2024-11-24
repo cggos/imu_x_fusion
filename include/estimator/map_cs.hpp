@@ -54,7 +54,7 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 4> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  MAPCostFunctor(const FactorPtr& factor_odom6dof_ptr,
+  MAPCostFunctor(const Factor::Ptr& factor_odom6dof_ptr,
                  const Eigen::Isometry3d& Tcb,
                  const Eigen::Isometry3d& Tvw,
                  const Eigen::Isometry3d& TvoB,
@@ -110,7 +110,7 @@ class MAPCostFunctor : public ceres::SizedCostFunction<6, 3, 4> {
   Eigen::Isometry3d Tvo_obs_;
   Eigen::Matrix<double, kMeasDim, kMeasDim> Lt_;
 
-  FactorPtr factor_odom6dof_ptr_;
+  Factor::Ptr factor_odom6dof_ptr_;
 };
 
 }  // namespace cg

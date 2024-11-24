@@ -5,23 +5,53 @@
 #include <memory>
 
 #include "common/state.hpp"
+#include "fusion/predictor.hpp"
 
 namespace cg {
 
-struct ImuData {
-  double timestamp;
+class ImuData : public Predictor::Data {
+ public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   Eigen::Vector3d acc;
   Eigen::Vector3d gyr;
+
+  ImuData(double ts, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
+      : Predictor::Data(ts, acc, gyr), acc(acc), gyr(gyr) {}
+
+  using Ptr = std::shared_ptr<ImuData>;
+  using ConstPtr = std::shared_ptr<const ImuData>;
 };
-using ImuDataPtr = std::shared_ptr<ImuData>;
-using ImuDataConstPtr = std::shared_ptr<const ImuData>;
 
-class IMU {
+class IMU : public Predictor {
  public:
-  IMU(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : acc_noise_(acc_n), gyr_noise_(gyr_n), acc_bias_noise_(acc_w), gyr_bias_noise_(gyr_w) {}
+  IMU(State::Ptr state_ptr, double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
+      : Predictor(state_ptr), acc_noise_(acc_n), gyr_noise_(gyr_n), acc_bias_noise_(acc_w), gyr_bias_noise_(gyr_w) {}
 
-  bool push_data(ImuDataPtr imu_ptr, const bool &inited) {
+  using Ptr = std::shared_ptr<IMU>;
+
+  virtual void predict(Data::ConstPtr last_ptr, Data::ConstPtr curr_ptr) {
+    auto last_imu = last_ptr->data_;
+    auto curr_imu = curr_ptr->data_;
+    if (last_imu.size() != 6 || curr_imu.size() != 6) return;
+
+    State last_state = *state_ptr_;
+
+    state_ptr_->timestamp = curr_ptr->timestamp_;
+
+    ImuData::Ptr last_imu_ptr = std::make_shared<ImuData>(last_ptr->timestamp_, last_imu.head(3), last_imu.tail(3));
+    ImuData::Ptr curr_imu_ptr = std::make_shared<ImuData>(curr_ptr->timestamp_, curr_imu.head(3), curr_imu.tail(3));
+
+    propagate_state(last_imu_ptr, curr_imu_ptr, last_state, *state_ptr_);
+    propagate_state_cov(last_imu_ptr, curr_imu_ptr, last_state, *state_ptr_);
+  }
+
+  virtual bool push_data(Data::ConstPtr data_ptr) {
+    auto acc = data_ptr->data_.head(3);
+    auto gyr = data_ptr->data_.tail(3);
+
+    auto imu_ptr = std::make_shared<ImuData>(data_ptr->timestamp_, acc, gyr);
+
     // remove spikes
     static Eigen::Vector3d last_am = Eigen::Vector3d::Zero();
     if (imu_ptr->acc.norm() > 5 * kG) {
@@ -30,30 +60,31 @@ class IMU {
       last_am = imu_ptr->acc;
     }
 
-    if (!inited) {
-      imu_buf_.push_back(imu_ptr);
-      if (imu_buf_.size() > kImuBufSize) imu_buf_.pop_front();
-      return false;
-    }
+    imu_buf_.push_back(imu_ptr);
+    if (imu_buf_.size() > kImuBufSize) imu_buf_.pop_front();
 
     return true;
   }
 
-  bool init(State &state, double ts_meas, ImuDataConstPtr &last_imu_ptr) {
+  virtual bool init(double ts_meas) {
     if (imu_buf_.size() < kImuBufSize) {
       printf("[cggos %s] ERROR: Not Enough IMU data for Initialization!!!\n", __FUNCTION__);
       return false;
     }
 
-    last_imu_ptr = imu_buf_.back();
-    if (std::abs(ts_meas - last_imu_ptr->timestamp) > 0.05) {
+    const auto &imu = imu_buf_.back();
+    last_data_ptr_ = std::make_shared<Predictor::Data>(imu->timestamp_, imu->acc, imu->gyr);
+
+    if (std::abs(ts_meas - last_data_ptr_->timestamp_) > 0.05) {
       printf("[cggos %s] ERROR: timestamps are not synchronized!!!\n", __FUNCTION__);
       return false;
     }
 
-    state.timestamp = last_imu_ptr->timestamp;
+    state_ptr_->timestamp = last_data_ptr_->timestamp_;
 
-    return init_rot_from_imudata(imu_buf_, state.Rwb_);
+    inited_ = init_rot_from_imudata(imu_buf_, state_ptr_->Rwb_);
+
+    return inited_;
   }
 
   /**
@@ -71,14 +102,14 @@ class IMU {
    * @param vec_wg
    */
   void propagate_state(
-      ImuDataConstPtr last_imu,
-      ImuDataConstPtr curr_imu,
+      ImuData::ConstPtr last_imu,
+      ImuData::ConstPtr curr_imu,
       const State &last_state,
       State &state,
       bool with_noise = false,
       bool with_const_noise = true,
       const Eigen::Matrix<double, kNoiseDim, 1> &vec_noise = Eigen::Matrix<double, kNoiseDim, 1>::Zero()) {
-    const double dt = curr_imu->timestamp - last_imu->timestamp;
+    const double dt = curr_imu->timestamp_ - last_imu->timestamp_;
     const double dt2 = dt * dt;
 
     Eigen::Vector3d vec_na = Eigen::Vector3d::Zero();
@@ -127,8 +158,11 @@ class IMU {
    * @param last_state
    * @param state
    */
-  void propagate_state_cov(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu, const State &last_state, State &state) {
-    const double dt = curr_imu->timestamp - last_imu->timestamp;
+  void propagate_state_cov(ImuData::ConstPtr last_imu,
+                           ImuData::ConstPtr curr_imu,
+                           const State &last_state,
+                           State &state) {
+    const double dt = curr_imu->timestamp_ - last_imu->timestamp_;
 
     const Eigen::Vector3d acc_unbias = 0.5 * (last_imu->acc + curr_imu->acc) - last_state.acc_bias;
     const Eigen::Vector3d gyr_unbias = 0.5 * (last_imu->gyr + curr_imu->gyr) - last_state.gyr_bias;
@@ -167,12 +201,10 @@ class IMU {
     return Fi * noise_cov(dt) * Fi.transpose();
   }
 
-  static bool init_rot_from_imudata(const std::deque<ImuDataConstPtr> &imu_buf, Eigen::Matrix3d &Rwb) {
+  static bool init_rot_from_imudata(const std::deque<ImuData::ConstPtr> &imu_buf, Eigen::Matrix3d &Rwb) {
     // mean and std of IMU accs
     Eigen::Vector3d sum_acc(0., 0., 0.);
-    for (const auto imu_data : imu_buf) {
-      sum_acc += imu_data->acc;
-    }
+    for (const auto &imu_data : imu_buf) sum_acc += imu_data->acc;
     const Eigen::Vector3d mean_acc = sum_acc / (double)imu_buf.size();
     printf("[cggos %s] mean_acc: (%f, %f, %f)!!!\n", __FUNCTION__, mean_acc[0], mean_acc[1], mean_acc[2]);
 
@@ -183,6 +215,11 @@ class IMU {
     // acc std limit: 3
     if (std_acc.maxCoeff() > 3.0) {
       printf("[cggos %s] Too big acc std: (%f, %f, %f)!!!\n", __FUNCTION__, std_acc[0], std_acc[1], std_acc[2]);
+      return false;
+    }
+
+    if (std_acc.isZero(std::numeric_limits<float>::epsilon())) {
+      printf("[cggos %s] acc std is Zero: (%f, %f, %f)!!!\n", __FUNCTION__, std_acc[0], std_acc[1], std_acc[2]);
       return false;
     }
 
@@ -211,15 +248,14 @@ class IMU {
     return true;
   }
 
- public:
-  static const int kImuBufSize = 200;
-  std::deque<ImuDataConstPtr> imu_buf_;
-
  private:
   double acc_noise_;
   double gyr_noise_;
   double acc_bias_noise_;
   double gyr_bias_noise_;
+
+  static const int kImuBufSize = 200;
+  std::deque<ImuData::ConstPtr> imu_buf_;
 };
 
 }  // namespace cg

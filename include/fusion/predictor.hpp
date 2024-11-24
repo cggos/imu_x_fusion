@@ -1,53 +1,67 @@
 #pragma once
 
-#include <sensor_msgs/Imu.h>
-
 #include "common/state.hpp"
-#include "sensor/imu.hpp"
 
 namespace cg {
 
 class Predictor {
  public:
-  Predictor() {}
+  class Data {
+   public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    double timestamp_;
+    Eigen::VectorXd data_;
+
+    Data(double ts, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr) : timestamp_(ts) {
+      data_ = Eigen::MatrixXd::Zero(6, 1);
+      data_.head(3) = acc;
+      data_.tail(3) = gyr;
+    }
+
+    using Ptr = std::shared_ptr<Data>;
+    using ConstPtr = std::shared_ptr<const Data>;
+  };
+
+  using Ptr = std::shared_ptr<Predictor>;
+
+  Predictor() = default;
 
   Predictor(const Predictor &) = delete;
 
-  Predictor(StatePtr &state_ptr, double acc_n, double gyr_n, double acc_w, double gyr_w)
-      : state_p_(state_ptr), imu_model_(acc_n, gyr_n, acc_w, gyr_w) {}
-
-  bool init(double ts_meas) { return inited_ = imu_model_.init(*state_p_, ts_meas, last_imu_ptr_); }
-
-  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
-    ImuDataPtr imu_data_ptr = std::make_shared<ImuData>();
-    imu_data_ptr->timestamp = imu_msg->header.stamp.toSec();
-    imu_data_ptr->acc[0] = imu_msg->linear_acceleration.x;
-    imu_data_ptr->acc[1] = imu_msg->linear_acceleration.y;
-    imu_data_ptr->acc[2] = imu_msg->linear_acceleration.z;
-    imu_data_ptr->gyr[0] = imu_msg->angular_velocity.x;
-    imu_data_ptr->gyr[1] = imu_msg->angular_velocity.y;
-    imu_data_ptr->gyr[2] = imu_msg->angular_velocity.z;
-
-    if (!imu_model_.push_data(imu_data_ptr, inited_)) return;
-
-    predict(last_imu_ptr_, imu_data_ptr);
-
-    last_imu_ptr_ = imu_data_ptr;
-  }
-
-  virtual void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) = 0;
+  Predictor(State::Ptr state_ptr) : state_ptr_(state_ptr) {}
 
   virtual ~Predictor() {}
+
+  virtual bool init(double ts_meas) = 0;
+
+  void process(Data::ConstPtr data_ptr, std::function<void(Data::ConstPtr, Data::ConstPtr)> func_predict = nullptr) {
+    if (!data_ptr) return;
+
+    if (!inited_)
+      push_data(data_ptr);
+    else {
+      if (func_predict != nullptr)
+        func_predict(last_data_ptr_, data_ptr);
+      else
+        predict(last_data_ptr_, data_ptr);
+    }
+
+    last_data_ptr_ = data_ptr;
+  }
+
+ protected:
+  virtual bool push_data(Data::ConstPtr data_ptr) = 0;
+
+  virtual void predict(Data::ConstPtr last_ptr, Data::ConstPtr curr_ptr) = 0;
 
  public:
   bool inited_ = false;
 
-  IMU imu_model_;
-  ImuDataConstPtr last_imu_ptr_;
+  State::Ptr state_ptr_;
 
- private:
-  StatePtr state_p_;
+ protected:
+  Data::ConstPtr last_data_ptr_;
 };
-using PredictorPtr = std::unique_ptr<Predictor>;
 
 }  // namespace cg

@@ -50,8 +50,9 @@ class MAPFusionNode {
     sigma_rp *= kDegreeToRadian;
     sigma_yaw *= kDegreeToRadian;
 
-    map_ptr_ = std::make_shared<MAP>(acc_n, gyr_n, acc_w, gyr_w);
+    map_ptr_ = std::make_shared<MAP>();
     // map_ptr_->state_ptr_->set_cov(sigma_pv, sigma_pv, sigma_rp, sigma_yaw, acc_w, gyr_w);
+    map_ptr_->predictor_ptr_ = std::make_shared<IMU>(map_ptr_->state_ptr_, acc_n, gyr_n, acc_w, gyr_w);
     factor_odom6dof_ptr_ = std::make_shared<Odom6Dof>();
 
     // init bias
@@ -59,13 +60,26 @@ class MAPFusionNode {
     Eigen::Vector3d gyr_bias(0.00224079, 0.0218608, 0.0736346);
     map_ptr_->state_ptr_->set_bias(acc_bias, gyr_bias);
 
-    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&MAP::imu_callback, map_ptr_.get(), _1));
+    imu_sub_ = nh.subscribe<sensor_msgs::Imu>(topic_imu, 10, boost::bind(&MAPFusionNode::imu_callback, this, _1));
     vo_sub_ = nh.subscribe(topic_vo, 10, &MAPFusionNode::vo_callback, this);
 
     Tcb = Utils::getTransformEigen(pnh, "cam0/T_cam_imu");
   }
 
   ~MAPFusionNode() {}
+
+  void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg) {
+    Eigen::Vector3d acc, gyr;
+    double ts = imu_msg->header.stamp.toSec();
+    acc[0] = imu_msg->linear_acceleration.x;
+    acc[1] = imu_msg->linear_acceleration.y;
+    acc[2] = imu_msg->linear_acceleration.z;
+    gyr[0] = imu_msg->angular_velocity.x;
+    gyr[1] = imu_msg->angular_velocity.y;
+    gyr[2] = imu_msg->angular_velocity.z;
+
+    map_ptr_->predict(std::make_shared<ImuData>(ts, acc, gyr));
+  }
 
   void vo_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &vo_msg);
 
@@ -76,8 +90,8 @@ class MAPFusionNode {
   Eigen::Isometry3d Tcb;
   Eigen::Isometry3d Tvw;
 
-  MAPPtr map_ptr_;
-  FactorPtr factor_odom6dof_ptr_;
+  MAP::Ptr map_ptr_;
+  Factor::Ptr factor_odom6dof_ptr_;
 
   Viewer viewer_;
 };
@@ -89,8 +103,8 @@ void MAPFusionNode::vo_callback(const geometry_msgs::PoseWithCovarianceStampedCo
   const Eigen::Matrix<double, kMeasDim, kMeasDim> &R =
       Eigen::Map<const Eigen::Matrix<double, kMeasDim, kMeasDim>>(vo_msg->pose.covariance.data());
 
-  if (!map_ptr_->inited_) {
-    if (!map_ptr_->init(vo_msg->header.stamp.toSec())) return;
+  if (!map_ptr_->predictor_ptr_->inited_) {
+    if (!map_ptr_->predictor_ptr_->init(vo_msg->header.stamp.toSec())) return;
 
     Eigen::Isometry3d Tb0bm;
     Tb0bm.linear() = map_ptr_->state_ptr_->Rwb_;

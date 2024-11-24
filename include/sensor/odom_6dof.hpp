@@ -11,6 +11,10 @@ constexpr int kMeasDim = 6;
 
 class Odom6Dof : public Observer {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  using Ptr = std::shared_ptr<Odom6Dof>;
+
   Odom6Dof() = default;
 
   virtual ~Odom6Dof() {}
@@ -157,6 +161,5 @@ class Odom6Dof : public Observer {
   Eigen::Isometry3d Tvw_;
   Eigen::Isometry3d Tcb_;
 };
-using Odom6DofPtr = std::shared_ptr<Odom6Dof>;
 
 }  // namespace cg

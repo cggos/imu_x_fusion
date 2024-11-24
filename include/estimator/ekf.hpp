@@ -7,30 +7,19 @@ namespace cg {
 
 class EKF : public KF {
  public:
-  StatePtr state_ptr_i_;  // for IEKF
-
-  EKF() = delete;
+  EKF() = default;
 
   EKF(const EKF &) = delete;
 
-  explicit EKF(double acc_n = 1e-2, double gyr_n = 1e-4, double acc_w = 1e-6, double gyr_w = 1e-8)
-      : KF(acc_n, gyr_n, acc_w, gyr_w) {
+  explicit EKF(double sigma_p, double sigma_v, double sigma_rp, double sigma_yaw, double sigma_ba, double sigma_bg) {
     state_ptr_i_ = std::make_shared<State>();
+
+    state_ptr_->set_cov(sigma_p, sigma_v, sigma_rp, sigma_yaw, sigma_ba, sigma_bg);
   }
 
-  /**
-   * @brief predict procedure
-   * @param last_imu
-   * @param curr_imu
-   */
-  void predict(ImuDataConstPtr last_imu, ImuDataConstPtr curr_imu) {
-    State last_state = *state_ptr_;
+  virtual ~EKF() {}
 
-    state_ptr_->timestamp = curr_imu->timestamp;
-
-    imu_model_.propagate_state(last_imu, curr_imu, last_state, *state_ptr_);
-    imu_model_.propagate_state_cov(last_imu, curr_imu, last_state, *state_ptr_);
-  }
+  virtual void predict(Predictor::Data::ConstPtr data_ptr) { predictor_ptr_->process(data_ptr); }
 
   template <class H_type, class R_type, class K_type>
   void update_K(const Eigen::MatrixBase<H_type> &H, const Eigen::MatrixBase<R_type> &R, Eigen::MatrixBase<K_type> &K) {
@@ -48,7 +37,8 @@ class EKF : public KF {
     state_ptr_->cov = I_KH * state_ptr_->cov * I_KH.transpose() + K * R * K.transpose();
   }
 
-  ~EKF() {}
+ public:
+  State::Ptr state_ptr_i_;  // for IEKF
 };
 
 using EKFPtr = std::unique_ptr<EKF>;

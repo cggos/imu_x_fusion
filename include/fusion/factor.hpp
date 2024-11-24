@@ -6,6 +6,10 @@ namespace cg {
 
 class Factor {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  using Ptr = std::shared_ptr<Factor>;
+
   Factor() = default;
 
   Factor(const Factor &) = delete;
@@ -18,6 +22,5 @@ class Factor {
 
   virtual ~Factor() {}
 };
-using FactorPtr = std::shared_ptr<Factor>;
 
 }  // namespace cg
