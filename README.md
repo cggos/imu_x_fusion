@@ -64,7 +64,7 @@ IMU + X Loosely-Coupled Fusion Localization
 
 ## Requirements
 
-tested on Ubuntu 16.04 and Ubuntu 18.04
+tested on Ubuntu 16.04, Ubuntu 18.04 and Ubuntu 20.04
 
 * Ubuntu 16.04 & ROS Kinetic
 
@@ -78,6 +78,15 @@ tested on Ubuntu 16.04 and Ubuntu 18.04
   * OpenCV 3
   * ROS package: nmea_navsat_driver
   * GeographicLib 1.49
+    ```sh
+    sudo apt install libgeographic-dev
+    ```
+
+* Ubuntu 20.04 & ROS Melodic
+
+  * OpenCV 3
+  * ROS package: nmea_navsat_driver
+  * GeographicLib 1.50.1
     ```sh
     sudo apt install libgeographic-dev
     ```
